@@ -1,0 +1,48 @@
+{% extends 'base.html' %}
+{% load crispy_forms_tags %}
+
+{% block page_title %}Settings{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-lg-6 mb-4">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">Profile Settings</h5>
+            </div>
+            <div class="card-body">
+                <form method="post">
+                    {% csrf_token %}
+                    {{ profile_form|crispy }}
+                    <button type="submit" name="update_profile" class="btn btn-npa mt-3">
+                        Update Profile
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-lg-6 mb-4">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">Security Settings</h5>
+            </div>
+            <div class="card-body">
+                <form method="post">
+                    {% csrf_token %}
+                    {{ pin_form|crispy }}
+                    <button type="submit" name="set_pin" class="btn btn-npa mt-3">
+                        {% if user.pin_set %}Update{% else %}Set{% endif %} PIN
+                    </button>
+                </form>
+                
+                <hr class="my-4">
+                
+                <a href="{% url 'password_change' %}" class="btn btn-outline-secondary">
+                    <i class="bi bi-key me-2"></i>Change Password
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

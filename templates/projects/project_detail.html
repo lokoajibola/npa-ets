@@ -1,0 +1,248 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block page_title %}{{ project.title }}{% endblock %}
+
+{% block actions %}
+<div class="btn-group">
+    <a href="{% url 'project_update' project.project_id %}" class="btn btn-outline-secondary">
+        <i class="bi bi-pencil me-1"></i>Edit
+    </a>
+    <button type="button" class="btn btn-outline-secondary dropdown-toggle" 
+            data-bs-toggle="dropdown">
+        <span class="visually-hidden">Toggle Dropdown</span>
+    </button>
+    <ul class="dropdown-menu">
+        <li><a class="dropdown-item" href="#">
+            <i class="bi bi-file-pdf me-2"></i>Generate Report
+        </a></li>
+        <li><a class="dropdown-item" href="#">
+            <i class="bi bi-share me-2"></i>Share Project
+        </a></li>
+        <li><hr class="dropdown-divider"></li>
+        {% if project.status == 'draft' %}
+        <li><a class="dropdown-item text-success" href="#">
+            <i class="bi bi-send me-2"></i>Submit for Approval
+        </a></li>
+        {% endif %}
+    </ul>
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="row">
+    <!-- Project Overview -->
+    <div class="col-lg-4 mb-4">
+        <div class="card h-100">
+            <div class="card-header">
+                <h5 class="card-title mb-0">Project Overview</h5>
+            </div>
+            <div class="card-body">
+                <div class="mb-3">
+                    <h6 class="text-muted mb-2">Project ID</h6>
+                    <p class="fw-bold">{{ project.project_id }}</p>
+                </div>
+                
+                <div class="mb-3">
+                    <h6 class="text-muted mb-2">Status & Priority</h6>
+                    <div class="d-flex gap-2">
+                        <span class="badge bg-{{ project.status|status_badge }}">
+                            {{ project.get_status_display }}
+                        </span>
+                        <span class="badge bg-{{ project.priority|priority_badge }}">
+                            {{ project.get_priority_display }}
+                        </span>
+                    </div>
+                </div>
+                
+                <div class="mb-3">
+                    <h6 class="text-muted mb-2">Budget Information</h6>
+                    <div class="row">
+                        <div class="col-6">
+                            <small>Estimated</small>
+                            <p class="fw-bold">₦{{ project.estimated_budget|floatformat:2 }}</p>
+                        </div>
+                        <div class="col-6">
+                            <small>Spent</small>
+                            <p class="fw-bold text-danger">₦{{ project.spent_budget|floatformat:2 }}</p>
+                        </div>
+                    </div>
+                    <div class="progress" style="height: 6px;">
+                        {% with spent_percent=project.spent_budget|div:project.estimated_budget|mul:100 %}
+                        <div class="progress-bar bg-danger" style="width: {{ spent_percent }}%"></div>
+                        {% endwith %}
+                    </div>
+                </div>
+                
+                <div class="mb-3">
+                    <h6 class="text-muted mb-2">Timeline</h6>
+                    <div class="row">
+                        <div class="col-6">
+                            <small>Start Date</small>
+                            <p class="fw-bold">{{ project.proposed_start_date|date:"d M Y" }}</p>
+                        </div>
+                        <div class="col-6">
+                            <small>End Date</small>
+                            <p class="fw-bold">{{ project.proposed_end_date|date:"d M Y" }}</p>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="mb-3">
+                    <h6 class="text-muted mb-2">Project Team</h6>
+                    <ul class="list-unstyled">
+                        <li class="mb-1">
+                            <small class="text-muted">Created By:</small><br>
+                            {{ project.created_by.get_full_name }}
+                        </li>
+                        {% if project.project_manager %}
+                        <li class="mb-1">
+                            <small class="text-muted">Project Manager:</small><br>
+                            {{ project.project_manager.get_full_name }}
+                        </li>
+                        {% endif %}
+                        {% if project.supervisor %}
+                        <li class="mb-1">
+                            <small class="text-muted">Supervisor:</small><br>
+                            {{ project.supervisor.get_full_name }}
+                        </li>
+                        {% endif %}
+                    </ul>
+                </div>
+                
+                {% if project.contractor %}
+                <div class="mb-3">
+                    <h6 class="text-muted mb-2">Contractor</h6>
+                    <p class="fw-bold">{{ project.contractor.name }}</p>
+                    <small class="text-muted">{{ project.contractor.registration_number }}</small>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Project Stages Grid (4x4) -->
+    <div class="col-lg-8 mb-4">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="card-title mb-0">Project Workflow Stages</h5>
+                <span class="badge bg-primary">Progress: {{ project.progress_percentage }}%</span>
+            </div>
+            <div class="card-body">
+                <!-- Progress Bar -->
+                <div class="progress mb-4" style="height: 10px;">
+                    <div class="progress-bar progress-bar-striped progress-bar-animated" 
+                         style="width: {{ project.progress_percentage }}%">
+                    </div>
+                </div>
+                
+                <!-- 4x4 Grid -->
+                {% for row in stages_grid %}
+                <div class="row mb-3">
+                    {% for stage in row %}
+                    <div class="col-md-3 col-6 mb-3">
+                        <div class="stage-card status-{{ stage.status }}"
+                             onclick="window.location='{% url 'update_stage' project.project_id stage.stage_id %}'">
+                            <div class="d-flex justify-content-between align-items-start mb-2">
+                                <span class="badge bg-{{ stage.status|status_badge }} rounded-pill">
+                                    {{ stage.get_status_display|slice:":1" }}
+                                </span>
+                                <small class="text-muted">#{{ stage.order }}</small>
+                            </div>
+                            
+                            <h6 class="fw-bold mb-2" style="font-size: 0.9rem;">
+                                {{ stage.get_stage_type_display }}
+                            </h6>
+                            
+                            {% if stage.assigned_to %}
+                            <small class="text-muted d-block">
+                                <i class="bi bi-person"></i>
+                                {{ stage.assigned_to.get_short_name }}
+                            </small>
+                            {% endif %}
+                            
+                            {% if stage.end_date %}
+                            <small class="text-muted d-block">
+                                <i class="bi bi-calendar"></i>
+                                {{ stage.end_date|date:"d/m/y" }}
+                            </small>
+                            {% endif %}
+                            
+                            {% if stage.requires_approval %}
+                            <span class="badge bg-warning mt-2">Needs Approval</span>
+                            {% endif %}
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% endfor %}
+                
+                <!-- Stage Legend -->
+                <div class="mt-4">
+                    <small class="text-muted">Legend:</small>
+                    <div class="d-flex flex-wrap gap-2 mt-1">
+                        <span class="badge bg-secondary">Pending</span>
+                        <span class="badge bg-primary">In Progress</span>
+                        <span class="badge bg-success">Completed</span>
+                        <span class="badge bg-danger">Blocked</span>
+                        <span class="badge bg-warning">Requires Approval</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Recent Documents -->
+        <div class="card mt-4">
+            <div class="card-header">
+                <h5 class="card-title mb-0">Recent Documents</h5>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-sm">
+                        <thead>
+                            <tr>
+                                <th>Document</th>
+                                <th>Type</th>
+                                <th>Uploaded</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for doc in documents|slice:":5" %}
+                            <tr>
+                                <td>
+                                    <i class="bi bi-file-{{ doc.document_type|doc_icon }} me-2"></i>
+                                    {{ doc.title }}
+                                </td>
+                                <td>
+                                    <span class="badge bg-info">{{ doc.get_document_type_display }}</span>
+                                </td>
+                                <td>
+                                    <small>{{ doc.uploaded_at|date:"d M Y" }}</small>
+                                </td>
+                                <td>
+                                    <a href="{{ doc.file.url }}" class="btn btn-sm btn-outline-primary">
+                                        <i class="bi bi-download"></i>
+                                    </a>
+                                </td>
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="4" class="text-center text-muted">
+                                    No documents uploaded
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                <div class="text-center mt-2">
+                    <a href="#" class="btn btn-sm btn-npa">
+                        <i class="bi bi-upload me-1"></i>Upload Document
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
