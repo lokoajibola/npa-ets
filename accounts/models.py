@@ -16,26 +16,27 @@ class User(AbstractUser):
     
     # Grade Levels for Engineers
     GRADE_LEVEL_CHOICES = [
-        (16, 'GL 16 - Director'),
-        (15, 'GL 15 - Deputy Director'),
-        (14, 'GL 14 - Assistant Director'),
-        (13, 'GL 13 - Chief Engineer'),
-        (12, 'GL 12 - Principal Engineer'),
-        (10, 'GL 10 - Senior Engineer'),
-        (9, 'GL 9 - Engineer I'),
-        (8, 'GL 8 - Engineer II'),
+        (16, 'GL 17 - Executive Director'),
+        (16, 'GL 16 - General Manager'),
+        (15, 'GL 15 - Asst. General Manager'),
+        (14, 'GL 14 - Principal Manager'),
+        (13, 'GL 13 - Senior Manager'),
+        (12, 'GL 12 - Manager'),
+        (10, 'GL 10 - Asst. Manager'),
+        (9, 'GL 9 -  I'),
+        (8, 'GL 8 -  II'),
     ]
     
     # Department Choices
     DEPARTMENT_CHOICES = [
         ('civil', 'Civil Engineering'),
         ('electrical', 'Electrical Engineering'),
-        ('mechanical', 'Mechanical Engineering'),
+        
         ('marine', 'Marine Engineering'),
         ('planning', 'Planning & Design'),
         ('maintenance', 'Maintenance'),
         ('dredging', 'Dredging'),
-        ('environmental', 'Environmental Engineering'),
+        
     ]
     
     # User fields

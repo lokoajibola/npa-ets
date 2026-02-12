@@ -1,5 +1,6 @@
 {% extends 'base.html' %}
 {% load crispy_forms_tags %}
+{% load static %}
 
 {% block title %}Login - NPA Engineering{% endblock %}
 
@@ -11,13 +12,13 @@
                 <!-- NPA Logo and Header -->
                 <div class="text-center mb-4">
                     <div class="mb-3">
-                        <img src="https://via.placeholder.com/80x80/003087/FFFFFF?text=NPA" 
-                             alt="NPA Logo" class="rounded-circle" height="80">
+                        <img src="{% static 'images/npa2.png' %}" 
+                             alt="NPA Logo" class="d-inline-block align-text-top me-2" height="80">
                     </div>
                     <h3 class="h4 fw-bold" style="color: var(--npa-blue);">
-                        NIGERIAN PORTS AUTHORITY
+                        ENGINEERING PROJECTS MANAGEMENT SYSTEM
                     </h3>
-                    <p class="text-muted">Engineering Projects Management System</p>
+                    
                 </div>
                 
                 <!-- Login Form -->

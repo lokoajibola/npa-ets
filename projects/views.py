@@ -6,7 +6,7 @@ from django.urls import reverse_lazy
 from django.contrib import messages
 from django.db.models import Q
 from .models import Project, ProjectStage, ProjectDocument, ProgressReport, Contractor
-from .forms import ProjectForm, ProjectStageForm, ProjectDocumentForm, ProgressReportForm
+from .forms import ProjectForm, ProjectStageForm, ProjectDocumentForm, ProgressReportForm, BOQBEMEForm, SiteInspectionForm, ProjectProposalForm, ContractAwardForm, DueDiligenceForm, ProjectCertificationForm, NominationSupervisorForm
 from django.utils import timezone
 
 # Project List View
@@ -70,8 +70,16 @@ class ProjectDetailView(LoginRequiredMixin, DetailView):
     model = Project
     template_name = 'projects/project_detail.html'
     context_object_name = 'project'
-    pk_url_kwarg = 'pk'
     
+    pk_url_kwarg = 'project_id'  # ADD THIS LINE
+    slug_field = 'project_id'    # ADD THIS LINE
+    slug_url_kwarg = 'project_id'  # ADD THIS LINE
+    
+    def get_object(self):
+        # Look up by project_id instead of pk
+        project_id = self.kwargs.get('project_id') or self.kwargs.get('pk')
+        return get_object_or_404(Project, project_id=project_id)
+
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         project = self.get_object()
@@ -149,10 +157,18 @@ class ProjectUpdateView(LoginRequiredMixin, UpdateView):
     model = Project
     form_class = ProjectForm
     template_name = 'projects/project_form.html'
-    pk_url_kwarg = 'pk'
+    # pk_url_kwarg = 'pk'
+
+    def get_object(self):
+        # Get project by project_id instead of pk
+        project_id = self.kwargs.get('project_id')
+        return get_object_or_404(Project, project_id=project_id)
     
     def get_success_url(self):
-        return reverse_lazy('project_detail', kwargs={'pk': self.object.pk})
+        return reverse_lazy('project_detail', kwargs={'project_id': self.object.project_id})
+    
+    # def get_success_url(self):
+    #     return reverse_lazy('project_detail', kwargs={'pk': self.object.pk})
     
     def dispatch(self, request, *args, **kwargs):
         project = self.get_object()
@@ -323,3 +339,204 @@ def complete_project(request, project_id):
     
     messages.success(request, 'Project marked as completed!')
     return redirect('project_detail', pk=project_id)
+
+@login_required
+def site_inspection_view(request, project_id, stage_id):
+    return stage_specific_view(request, project_id, stage_id, 
+                              'site_inspection', SiteInspectionForm,
+                              'stages/site_inspection.html')
+
+@login_required
+def project_proposal_view(request, project_id, stage_id):
+    return stage_specific_view(request, project_id, stage_id,
+                              'project_proposal', ProjectProposalForm,
+                              'stages/project_proposal.html')
+
+@login_required  
+def contract_award_view(request, project_id, stage_id):
+    return stage_specific_view(request, project_id, stage_id,
+                              'contract_award', ContractAwardForm,
+                              'stages/contract_award.html')
+
+# Stage-specific view functions
+from django.http import HttpResponse, FileResponse
+import json
+import os
+from .pdf_utils import generate_boq_pdf
+
+from .forms import BOQBEMEForm, BOQItemFormSet
+
+import json
+from django.core.serializers.json import DjangoJSONEncoder
+
+@login_required
+def boq_beme_view(request, project_id, stage_id):
+    project = get_object_or_404(Project, project_id=project_id)
+    stage = get_object_or_404(ProjectStage, stage_id=stage_id, project=project)
+    
+    if stage.stage_type != 'prepare_boq':
+        messages.error(request, "This is not a BOQ/BEME preparation stage")
+        return redirect('project_detail', project_id=project_id)
+    
+    from projects.models import BOQBEME
+    from accounts.models import User
+    
+    # Get or create BEME record for this stage
+    beme, created = BOQBEME.objects.get_or_create(
+        stage=stage,
+        project=project,
+        defaults={
+            'prepared_by': request.user,
+            'beme_number': f"BEME/{project.project_id}/{timezone.now().year}/{BOQBEME.objects.filter(project=project).count() + 1:03d}"
+        }
+    )
+    
+    # Get staff list
+    staff_list = User.objects.filter(is_active=True).exclude(id=request.user.id).order_by('-grade_level', 'last_name')
+    
+    formatted_staff = []
+    for staff in staff_list:
+        full_name = f"{staff.first_name} {staff.last_name}".strip() or staff.username
+        formatted_staff.append({
+            'id': staff.id,
+            'name': full_name,
+            'email': staff.email or '',
+            'office': staff.get_office_display() if staff.office else '',
+            'department': staff.get_department_display() if staff.department else '',
+            'grade_level': staff.grade_level,
+            'employee_id': staff.employee_id or '',
+            'is_approving_officer': staff.is_approving_officer,
+        })
+    
+    if request.method == 'POST':
+        form = BOQBEMEForm(request.POST, request.FILES, instance=beme)
+        
+        if form.is_valid():
+            # Save the form data
+            beme = form.save(commit=False)
+            
+            # Get the BEME data from the hidden field
+            beme_data = request.POST.get('beme_data', '{}')
+            section_order = request.POST.get('section_order', '[]')
+            
+            try:
+                beme.beme_data = json.loads(beme_data)
+                beme.section_order = json.loads(section_order)
+            except json.JSONDecodeError:
+                beme.beme_data = {}
+                beme.section_order = []
+            
+            # Get forward_to from the hidden input
+            forward_to_id = request.POST.get('forward_to')
+            if forward_to_id:
+                try:
+                    beme.forward_to = User.objects.get(id=forward_to_id)
+                except User.DoesNotExist:
+                    pass
+            
+            # Calculate totals from the JavaScript data
+            beme.subtotal = request.POST.get('subtotal', 0)
+            beme.contingency = request.POST.get('contingency', 0)
+            beme.vat = request.POST.get('vat', 0)
+            beme.grand_total = request.POST.get('grand_total', 0)
+            
+            beme.save()
+            
+            messages.success(request, 'BEME saved successfully!')
+            
+            if 'generate_pdf' in request.POST:
+                return redirect(f'{request.path}?action=generate_pdf')
+            
+            return redirect('project_detail', project_id=project_id)
+        else:
+            messages.error(request, 'Please correct the errors below.')
+    else:
+        form = BOQBEMEForm(instance=beme)
+    
+    # Calculate next sequence number
+    beme_count = BOQBEME.objects.filter(project=project).count()
+    beme_sequence = beme_count + 1
+    
+    context = {
+        'form': form,
+        'project': project,
+        'stage': stage,
+        'beme': beme,
+        'page_title': 'BEME Preparation',
+        'staff_list': json.dumps(formatted_staff, cls=DjangoJSONEncoder),
+        'beme_sequence': f"{beme_sequence:03d}",
+        'initial_beme_data': json.dumps(beme.beme_data if beme.beme_data else {}),
+    }
+    return render(request, 'stages/boq_beme_simple.html', context)
+
+@login_required
+def due_diligence_view(request, project_id, stage_id):
+    return stage_specific_view(request, project_id, stage_id,
+                              'due_diligence', DueDiligenceForm,
+                              'stages/due_diligence.html')
+
+@login_required
+def project_certification_view(request, project_id, stage_id):
+    return stage_specific_view(request, project_id, stage_id,
+                              'payment_certificate', ProjectCertificationForm,
+                              'stages/project_certification.html')
+
+@login_required  
+def contract_award_view(request, project_id, stage_id):
+    return stage_specific_view(request, project_id, stage_id,
+                              'contract_award', ContractAwardForm,
+                              'stages/contract_award.html')
+
+@login_required
+def nomination_supervisor_view(request, project_id, stage_id):
+    return stage_specific_view(request, project_id, stage_id,
+                              'nominate_pm', NominationSupervisorForm,
+                              'stages/nomination_supervisor.html')
+
+# Generic stage view handler
+def stage_specific_view(request, project_id, stage_id, stage_type, form_class, template_name):
+    project = get_object_or_404(Project, project_id=project_id)
+    stage = get_object_or_404(ProjectStage, stage_id=stage_id, project=project)
+    
+    # Verify stage type
+    if stage.stage_type != stage_type:
+        messages.error(request, f"Incorrect stage type. Expected: {stage_type}")
+        return redirect('project_detail', project_id=project_id)
+    
+    # Permission check
+    user = request.user
+    if not (user == stage.assigned_to or 
+            user == project.created_by or 
+            user.office in ['executive_director', 'general_manager', 'assistant_general_manager']):
+        messages.error(request, "You don't have permission to update this stage.")
+        return redirect('project_detail', project_id=project_id)
+    
+    if request.method == 'POST':
+        form = form_class(request.POST, request.FILES, instance=stage)
+        if form.is_valid():
+            stage = form.save()
+            
+            # Additional logic for specific stages
+            if stage_type == 'contract_award' and stage.status == 'completed':
+                # Update project with contractor info
+                project.contractor = stage.contractor
+                project.save()
+                
+            elif stage_type == 'nominate_pm' and stage.status == 'completed':
+                # Update project with nominated personnel
+                project.project_manager = form.cleaned_data.get('project_manager')
+                project.supervisor = form.cleaned_data.get('supervisor')
+                project.save()
+            
+            messages.success(request, f'{stage.get_stage_type_display()} updated successfully!')
+            return redirect('project_detail', project_id=project_id)
+    else:
+        form = form_class(instance=stage)
+    
+    context = {
+        'form': form,
+        'project': project,
+        'stage': stage,
+        'page_title': stage.get_stage_type_display(),
+    }
+    return render(request, template_name, context)

@@ -1,0 +1,58 @@
+{% extends 'base.html' %}
+
+{% block page_title %}Reports{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div class="card-header">
+        <h5 class="card-title mb-0">Reports Dashboard</h5>
+    </div>
+    <div class="card-body">
+        <div class="alert alert-info">
+            <i class="bi bi-info-circle me-2"></i>
+            Reports module is under construction. Coming soon!
+        </div>
+        <div class="row">
+            <div class="col-md-3 mb-3">
+                <div class="card text-center">
+                    <div class="card-body">
+                        <i class="bi bi-folder display-4 text-primary mb-3"></i>
+                        <h5>Project Reports</h5>
+                        <p class="text-muted">Generate project status reports</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3 mb-3">
+                <div class="card text-center">
+                    <div class="card-body">
+                        <i class="bi bi-cash-coin display-4 text-success mb-3"></i>
+                        <h5>Financial Reports</h5>
+                        <p class="text-muted">Budget and expenditure reports</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3 mb-3">
+                <div class="card text-center">
+                    <div class="card-body">
+                        <i class="bi bi-graph-up display-4 text-warning mb-3"></i>
+                        <h5>Analytics</h5>
+                        <p class="text-muted">Project analytics and insights</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3 mb-3">
+                <div class="card text-center">
+                    <div class="card-body">
+                        <i class="bi bi-file-pdf display-4 text-danger mb-3"></i>
+                        <h5>Export</h5>
+                        <p class="text-muted">Export data to PDF/Excel</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <a href="{% url 'dashboard' %}" class="btn btn-npa">
+            <i class="bi bi-arrow-left me-2"></i>Back to Dashboard
+        </a>
+    </div>
+</div>
+{% endblock %}

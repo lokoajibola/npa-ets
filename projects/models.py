@@ -117,12 +117,11 @@ class Project(models.Model):
         super().save(*args, **kwargs)
     
     def generate_project_id(self):
-        """Generate NPA standard project ID: NPA/ENG/2024/001"""
         year = timezone.now().year
         count = Project.objects.filter(
-            project_id__startswith=f"NPA/ENG/{year}/"
+            project_id__startswith=f"NPA-ENG-{year}-"
         ).count() + 1
-        return f"NPA/ENG/{year}/{count:03d}"
+        return f"NPA-ENG-{year}-{count:03d}"
     
     @property
     def is_overdue(self):
@@ -291,3 +290,89 @@ class TechnicalReview(models.Model):
     
     def __str__(self):
         return f"Tech Review - {self.project.project_id} - {self.review_date}"
+
+# stages/models.py
+from django.db import models
+from projects.models import Project
+from accounts.models import User
+import uuid
+
+class BOQBEME(models.Model):
+    STATUS_CHOICES = [
+        ('draft', 'Draft'),
+        ('pending', 'Pending Approval'),
+        ('approved', 'Approved'),
+        ('rejected', 'Rejected'),
+    ]
+    
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name='bemes')
+    stage = models.ForeignKey('ProjectStage', on_delete=models.CASCADE, related_name='bemes')
+    
+    # BEME specific fields
+    beme_number = models.CharField(max_length=50, unique=True)
+    prepared_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name='prepared_bemes')
+    forward_to = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name='forwarded_bemes')
+    
+    # BOQ/BEME data will be stored as JSON
+    beme_data = models.JSONField(default=dict)
+    section_order = models.JSONField(default=list)
+    
+    # Financial summary
+    subtotal = models.DecimalField(max_digits=15, decimal_places=2, default=0)
+    contingency = models.DecimalField(max_digits=15, decimal_places=2, default=0)
+    vat = models.DecimalField(max_digits=15, decimal_places=2, default=0)
+    grand_total = models.DecimalField(max_digits=15, decimal_places=2, default=0)
+    
+    # Metadata
+    document = models.FileField(upload_to='bemes/', null=True, blank=True)
+    notes = models.TextField(blank=True)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='draft')
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        ordering = ['-created_at']
+    
+    def __str__(self):
+        return f"{self.beme_number} - {self.project.project_id}"
+
+# projects/models.py - Update BOQItem model
+class BOQItem(models.Model):
+    UNIT_CHOICES = [
+        ('item', 'Item'),
+        ('nos', 'Nos'),
+        ('sqm', 'Sqm'),
+        ('m', 'M'),
+        ('m2', 'M²'),
+        ('m3', 'M³'),
+        ('kg', 'Kg'),
+        ('ton', 'Ton'),
+        ('day', 'Day'),
+        ('hour', 'Hour'),
+        ('lot', 'Lot'),
+    ]
+    
+    boq_id = models.UUIDField(default=uuid.uuid4, editable=False, unique=True)
+    project_stage = models.ForeignKey(ProjectStage, on_delete=models.CASCADE, related_name='boq_items')
+    section = models.CharField(max_length=100, default='Main Section')
+    item_number = models.CharField(max_length=20, default='1')
+    description = models.TextField()
+    quantity = models.DecimalField(max_digits=15, decimal_places=2, default=0)
+    unit = models.CharField(max_length=10, choices=UNIT_CHOICES, default='item')
+    rate = models.DecimalField(max_digits=15, decimal_places=2, default=0)
+    amount = models.DecimalField(max_digits=15, decimal_places=2, default=0)
+    notes = models.TextField(blank=True)
+    order = models.IntegerField(default=0)
+    
+    class Meta:
+        ordering = ['order', 'item_number']
+    
+    def save(self, *args, **kwargs):
+        # Auto-calculate amount
+        self.amount = self.quantity * self.rate
+        super().save(*args, **kwargs)
+    
+    def __str__(self):
+        return f"{self.item_number} - {self.description[:50]}"

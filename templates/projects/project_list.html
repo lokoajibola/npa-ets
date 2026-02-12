@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% load project_tags %}
 
 {% block page_title %}Projects Management{% endblock %}
 
@@ -100,7 +101,7 @@
                             <strong>{{ project.project_id }}</strong>
                         </td>
                         <td>
-                            <a href="{% url 'project_detail' project.project_id %}" 
+                            <a href="{% url 'project_detail' project_id=project.project_id|urlencode %}">
                                class="text-decoration-none">
                                 {{ project.title|truncatechars:40 }}
                             </a>

@@ -1,15 +1,40 @@
-from django.urls import path
+from django.urls import path, register_converter
 from . import views
+from . import converters
+
+register_converter(converters.ProjectIDConverter, 'projectid')
 
 urlpatterns = [
     # Project List and Detail
-    path('', views.ProjectListView.as_view(), name='project_list'),
-    path('<str:pk>/', views.ProjectDetailView.as_view(), name='project_detail'),
     path('create/', views.ProjectCreateView.as_view(), name='project_create'),
-    path('<str:pk>/update/', views.ProjectUpdateView.as_view(), name='project_update'),
+    path('', views.ProjectListView.as_view(), name='project_list'),
+    path('<str:project_id>/', views.ProjectDetailView.as_view(), name='project_detail'),
+    
+    path('<str:project_id>/update/', views.ProjectUpdateView.as_view(), name='project_update'),
     
     # Project Stages
     path('<str:project_id>/stage/<uuid:stage_id>/', views.update_stage, name='update_stage'),
+
+    # Replace generic stage URL with specific ones
+    path('<str:project_id>/stage/site-inspection/<uuid:stage_id>/', 
+        views.site_inspection_view, name='site_inspection'),
+    path('<str:project_id>/stage/project-proposal/<uuid:stage_id>/', 
+        views.project_proposal_view, name='project_proposal'),
+    path('<str:project_id>/stage/contract-award/<uuid:stage_id>/', 
+        views.contract_award_view, name='contract_award'),
+    # Add more for each stage type
+    # Replace or add these specific stage URLs
+    path('<str:project_id>/stage/boq-beme/<uuid:stage_id>/', 
+        views.boq_beme_view, name='boq_beme'),
+    path('<str:project_id>/stage/due-diligence/<uuid:stage_id>/', 
+        views.due_diligence_view, name='due_diligence'),
+    path('<str:project_id>/stage/project-certification/<uuid:stage_id>/', 
+        views.project_certification_view, name='project_certification'),
+    path('<str:project_id>/stage/contract-award/<uuid:stage_id>/', 
+        views.contract_award_view, name='contract_award'),
+    path('<str:project_id>/stage/nomination-supervisor/<uuid:stage_id>/', 
+        views.nomination_supervisor_view, name='nomination_supervisor'),
+
     
     # Project Documents
     path('<str:project_id>/documents/', views.project_documents, name='project_documents'),

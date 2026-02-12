@@ -1,3 +1,4 @@
+{% load static %}
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -15,11 +16,14 @@
             --npa-blue: #003087;
             --npa-yellow: #FFD100;
             --npa-light-blue: #0056b3;
+            --sidebar-width: 70px;
+            --sidebar-expanded-width: 280px;
         }
         
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             background-color: #f8f9fa;
+            overflow-x: hidden;
         }
         
         .navbar-npa {
@@ -27,11 +31,40 @@
             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
         }
         
+        /* Sidebar Styles */
+        .sidebar-wrapper {
+            position: fixed;
+            left: 0;
+            top: 56px;
+            width: var(--sidebar-width);
+            height: calc(100vh - 56px);
+            transition: width 0.3s ease;
+            z-index: 1000;
+        }
+        
         .sidebar {
             background-color: #ffffff;
             border-right: 1px solid #dee2e6;
-            min-height: calc(100vh - 56px);
+            height: 100%;
+            width: 100%;
             box-shadow: 1px 0 3px rgba(0,0,0,0.1);
+            overflow-y: auto;
+            overflow-x: hidden;
+            transition: width 0.3s ease;
+        }
+        
+        .sidebar-wrapper:hover {
+            width: var(--sidebar-expanded-width);
+        }
+        
+        .sidebar-wrapper:hover .sidebar {
+            box-shadow: 4px 0 10px rgba(0,0,0,0.15);
+        }
+        .sidebar .nav {
+            display: flex;
+            flex-direction: column;
+            width: 100%;
+            padding-top: 0.5rem;
         }
         
         .sidebar .nav-link {
@@ -40,12 +73,118 @@
             border-radius: 0.375rem;
             margin: 0.125rem 0.5rem;
             transition: all 0.2s;
+            white-space: nowrap;
+            display: flex;
+            align-items: center;
+        }
+
+        
+        .sidebar .nav-link i {
+            min-width: 24px;
+            font-size: 1.1rem;
+            margin-right: 12px;
+            text-align: center;
+            transition: transform 0.2s;
+        }
+       
+
+        .sidebar .nav-link:hover i {
+            transform: scale(2.0);
+        }
+        .sidebar .nav-link span {
+            opacity: 0;
+            transition: opacity 0.5s ease;
+        }
+        
+        .sidebar-wrapper:hover .nav-link span {
+            opacity: 1;
         }
         
         .sidebar .nav-link:hover,
         .sidebar .nav-link.active {
             background-color: var(--npa-blue);
             color: white;
+        }
+        
+
+        /* Quick stats section */
+        .sidebar .quick-stats {
+            padding: 0 1rem;
+            opacity: 0;
+            transition: opacity 0.2s ease;
+            white-space: nowrap;
+        }
+        
+        .sidebar-wrapper:hover .quick-stats {
+            opacity: 1;
+        }
+        
+        .sidebar hr {
+            opacity: 0;
+            transition: opacity 0.2s ease;
+            margin: 1rem 0;
+        }
+        
+        .sidebar-wrapper:hover hr {
+            opacity: 1;
+        }
+        
+        /* Main Content Adjustment */
+        .main-content {
+            margin-left: var(--sidebar-width);
+            transition: margin-left 0.3s ease;
+            width: calc(100% - var(--sidebar-width));
+        }
+        
+        /* Mobile Responsive */
+        @media (max-width: 768px) {
+            .sidebar-wrapper {
+                position: relative;
+                top: 0;
+                width: 100%;
+                height: auto;
+            }
+            
+            .sidebar {
+                min-height: auto;
+                border-right: none;
+                border-bottom: 1px solid #dee2e6;
+            }
+            
+            .sidebar .nav-link span {
+                opacity: 1;
+            }
+            
+            .sidebar .quick-stats {
+                opacity: 1;
+            }
+            
+            .sidebar hr {
+                opacity: 1;
+            }
+            
+            .main-content {
+                margin-left: 0;
+                width: 100%;
+            }
+        }
+        
+        /* Hide scrollbar for clean look */
+        .sidebar::-webkit-scrollbar {
+            width: 4px;
+        }
+        
+        .sidebar::-webkit-scrollbar-track {
+            background: #f1f1f1;
+        }
+        
+        .sidebar::-webkit-scrollbar-thumb {
+            background: #c1c1c1;
+            border-radius: 4px;
+        }
+        
+        .sidebar::-webkit-scrollbar-thumb:hover {
+            background: #a1a1a1;
         }
         
         .card {
@@ -116,24 +255,16 @@
             height: 0.75rem;
             border-radius: 0.375rem;
         }
-        
-        @media (max-width: 768px) {
-            .sidebar {
-                min-height: auto;
-                border-right: none;
-                border-bottom: 1px solid #dee2e6;
-            }
-        }
     </style>
     
     {% block extra_css %}{% endblock %}
 </head>
 <body>
     <!-- Navigation -->
-    <nav class="navbar navbar-expand-lg navbar-dark navbar-npa">
+    <nav class="navbar navbar-expand-lg navbar-dark navbar-npa fixed-top">
         <div class="container-fluid">
             <a class="navbar-brand d-flex align-items-center" href="{% url 'dashboard' %}">
-                <img src="https://via.placeholder.com/40x40/003087/FFFFFF?text=NPA" 
+                <img src="{% static 'images/npa3.png' %}" 
                      alt="NPA Logo" class="me-2" height="40">
                 <div>
                     <div class="fw-bold">NIGERIAN PORTS AUTHORITY</div>
@@ -179,116 +310,120 @@
         </div>
     </nav>
 
-    <div class="container-fluid">
-        <div class="row">
-            <!-- Sidebar -->
-            <div class="col-lg-2 col-md-3 sidebar d-none d-md-block">
-                <div class="pt-3">
-                    <nav class="nav flex-column">
-                        <a class="nav-link {% if request.path == '/' %}active{% endif %}" 
-                           href="{% url 'dashboard' %}">
-                            <i class="bi bi-speedometer2 me-2"></i>Dashboard
-                        </a>
-                        
-                        {% if perms.projects.view_project %}
-                        <a class="nav-link {% if 'projects' in request.path %}active{% endif %}" 
-                           href="{% url 'project_list' %}">
-                            <i class="bi bi-folder me-2"></i>Projects
-                        </a>
-                        {% endif %}
-                        
-                        {% if perms.projects.add_project %}
-                        <a class="nav-link" href="{% url 'project_create' %}">
-                            <i class="bi bi-plus-circle me-2"></i>Create Project
-                        </a>
-                        {% endif %}
-                        
-                        {% if perms.approvals.view_approvalworkflow %}
-                        <a class="nav-link {% if 'approvals' in request.path %}active{% endif %}" 
-                           href="{% url 'approval_list' %}">
-                            <i class="bi bi-check-circle me-2"></i>Approvals
-                            {% if pending_approvals %}
-                            <span class="badge bg-danger rounded-pill float-end">
-                                {{ pending_approvals }}
-                            </span>
-                            {% endif %}
-                        </a>
-                        {% endif %}
-                        
-                        {% if perms.reports.view_report %}
-                        <a class="nav-link {% if 'reports' in request.path %}active{% endif %}" 
-                           href="{% url 'report_list' %}">
-                            <i class="bi bi-file-text me-2"></i>Reports
-                        </a>
-                        {% endif %}
-                        
-                        {% if perms.accounts.view_user %}
-                        <a class="nav-link" href="{% url 'user_list' %}">
-                            <i class="bi bi-people me-2"></i>Users
-                        </a>
-                        {% endif %}
-                        
-                        <a class="nav-link {% if 'analytics' in request.path %}active{% endif %}" 
-                           href="{% url 'analytics' %}">
-                            <i class="bi bi-bar-chart me-2"></i>Analytics
-                        </a>
-                        
-                        <a class="nav-link {% if 'settings' in request.path %}active{% endif %}" 
-                           href="{% url 'settings' %}">
-                            <i class="bi bi-gear me-2"></i>Settings
-                        </a>
-                    </nav>
-                    
-                    <hr class="my-3">
-                    
-                    <div class="px-3">
-                        <small class="text-muted">QUICK STATS</small>
-                        <div class="mt-2">
-                            <small class="d-block">
-                                <i class="bi bi-folder text-primary me-1"></i>
-                                Total Projects: {{ total_projects }}
-                            </small>
-                            <small class="d-block">
-                                <i class="bi bi-play-circle text-success me-1"></i>
-                                Active: {{ active_projects }}
-                            </small>
-                            <small class="d-block">
-                                <i class="bi bi-exclamation-triangle text-warning me-1"></i>
-                                Overdue: {{ overdue_projects }}
-                            </small>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Main Content -->
-            <main class="col-lg-10 col-md-9 ms-sm-auto px-md-4 py-4">
-                <!-- Messages -->
-                {% if messages %}
-                <div class="messages mb-3">
-                    {% for message in messages %}
-                    <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
-                        {{ message }}
-                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-                    </div>
-                    {% endfor %}
-                </div>
+    <!-- Sidebar Wrapper - Fixed position -->
+    <div class="sidebar-wrapper">
+        <div class="sidebar">
+            <nav class="nav flex-column">
+                <a class="nav-link {% if request.path == '/' %}active{% endif %}" 
+                   href="{% url 'dashboard' %}">
+                    <i class="bi bi-speedometer2"></i>
+                    <span>Dashboard</span>
+                </a>
+                
+                {% if perms.projects.view_project %}
+                <a class="nav-link {% if 'projects' in request.path %}active{% endif %}" 
+                   href="{% url 'project_list' %}">
+                    <i class="bi bi-folder"></i>
+                    <span>Projects</span>
+                </a>
                 {% endif %}
                 
-                <!-- Page Header -->
-                <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center 
-                            pt-3 pb-2 mb-3 border-bottom">
-                    <h1 class="h2">{% block page_title %}{% endblock %}</h1>
-                    <div class="btn-toolbar mb-2 mb-md-0">
-                        {% block actions %}{% endblock %}
-                    </div>
-                </div>
+                {% if perms.projects.add_project %}
+                <a class="nav-link" href="{% url 'project_create' %}">
+                    <i class="bi bi-plus-circle"></i>
+                    <span>Create Project</span>
+                </a>
+                {% endif %}
                 
-                <!-- Main Content -->
-                {% block content %}{% endblock %}
-            </main>
+                {% if perms.approvals.view_approvalworkflow %}
+                <a class="nav-link {% if 'approvals' in request.path %}active{% endif %}" 
+                   href="{% url 'approval_list' %}">
+                    <i class="bi bi-check-circle"></i>
+                    <span>Approvals</span>
+                    {% if pending_approvals %}
+                    <span class="badge bg-danger rounded-pill ms-auto">
+                        {{ pending_approvals }}
+                    </span>
+                    {% endif %}
+                </a>
+                {% endif %}
+                
+                {% if perms.reports.view_report %}
+                <a class="nav-link {% if 'reports' in request.path %}active{% endif %}" 
+                   href="{% url 'report_list' %}">
+                    <i class="bi bi-file-text"></i>
+                    <span>Reports</span>
+                </a>
+                {% endif %}
+                
+                {% if perms.accounts.view_user %}
+                <a class="nav-link" href="{% url 'user_list' %}">
+                    <i class="bi bi-people"></i>
+                    <span>Users</span>
+                </a>
+                {% endif %}
+                
+                <a class="nav-link {% if 'analytics' in request.path %}active{% endif %}" 
+                   href="{% url 'analytics' %}">
+                    <i class="bi bi-bar-chart"></i>
+                    <span>Analytics</span>
+                </a>
+                
+                <a class="nav-link {% if 'settings' in request.path %}active{% endif %}" 
+                   href="{% url 'settings' %}">
+                    <i class="bi bi-gear"></i>
+                    <span>Settings</span>
+                </a>
+            </nav>
+            
+            <hr class="my-3">
+            
+            <div class="quick-stats">
+                <small class="text-muted">QUICK STATS</small>
+                <div class="mt-2">
+                    <small class="d-block">
+                        <i class="bi bi-folder text-primary me-1"></i>
+                        <span>Total Projects: {{ total_projects }}</span>
+                    </small>
+                    <small class="d-block">
+                        <i class="bi bi-play-circle text-success me-1"></i>
+                        <span>Active: {{ active_projects }}</span>
+                    </small>
+                    <small class="d-block">
+                        <i class="bi bi-exclamation-triangle text-warning me-1"></i>
+                        <span>Overdue: {{ overdue_projects }}</span>
+                    </small>
+                </div>
+            </div>
         </div>
     </div>
+
+    <!-- Main Content -->
+    <main class="main-content px-md-4 py-4" style="margin-top: 56px;">
+        <!-- Messages -->
+        {% if messages %}
+        <div class="messages mb-3">
+            {% for message in messages %}
+            <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+                {{ message }}
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+        
+        <!-- Page Header -->
+        <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center 
+                    pt-3 pb-2 mb-3 border-bottom">
+            <h1 class="h2">{% block page_title %}{% endblock %}</h1>
+            <div class="btn-toolbar mb-2 mb-md-0">
+                {% block actions %}{% endblock %}
+            </div>
+        </div>
+        
+        <!-- Main Content -->
+        {% block content %}{% endblock %}
+    </main>
 
     <!-- Bootstrap JS Bundle with Popper -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>

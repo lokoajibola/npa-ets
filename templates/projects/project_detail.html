@@ -1,5 +1,6 @@
 {% extends 'base.html' %}
 {% load static %}
+{% load project_tags %}
 
 {% block page_title %}{{ project.title }}{% endblock %}
 
@@ -7,6 +8,7 @@
 <div class="btn-group">
     <a href="{% url 'project_update' project.project_id %}" class="btn btn-outline-secondary">
         <i class="bi bi-pencil me-1"></i>Edit
+</a>
     </a>
     <button type="button" class="btn btn-outline-secondary dropdown-toggle" 
             data-bs-toggle="dropdown">
@@ -141,8 +143,20 @@
                 <div class="row mb-3">
                     {% for stage in row %}
                     <div class="col-md-3 col-6 mb-3">
-                        <div class="stage-card status-{{ stage.status }}"
-                             onclick="window.location='{% url 'update_stage' project.project_id stage.stage_id %}'">
+<div class="stage-card status-{{ stage.status }}"
+     {% if stage.stage_type == 'prepare_boq' %}
+     onclick="window.location='{% url 'boq_beme' project_id=project.project_id stage_id=stage.stage_id %}'"
+     {% elif stage.stage_type == 'due_diligence' %}
+     onclick="window.location='{% url 'due_diligence' project_id=project.project_id stage_id=stage.stage_id %}'"
+     {% elif stage.stage_type == 'payment_certificate' %}
+     onclick="window.location='{% url 'project_certification' project_id=project.project_id stage_id=stage.stage_id %}'"
+     {% elif stage.stage_type == 'contract_award' %}
+     onclick="window.location='{% url 'contract_award' project_id=project.project_id stage_id=stage.stage_id %}'"
+     {% elif stage.stage_type == 'nominate_pm' %}
+     onclick="window.location='{% url 'nomination_supervisor' project_id=project.project_id stage_id=stage.stage_id %}'"
+     {% else %}
+     onclick="window.location='{% url 'update_stage' project_id=project.project_id stage_id=stage.stage_id %}'"
+     {% endif %}>
                             <div class="d-flex justify-content-between align-items-start mb-2">
                                 <span class="badge bg-{{ stage.status|status_badge }} rounded-pill">
                                     {{ stage.get_status_display|slice:":1" }}

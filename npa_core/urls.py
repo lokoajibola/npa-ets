@@ -40,7 +40,6 @@ urlpatterns = [
     path('projects/', include('projects.urls')),
     path('approvals/', include('approvals.urls')),
     path('reports/', include('reports.urls')),
-    path('projects/', include('projects.urls')),
 ]
 
 if settings.DEBUG:

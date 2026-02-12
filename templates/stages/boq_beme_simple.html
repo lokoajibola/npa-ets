@@ -1,0 +1,999 @@
+{% extends 'base.html' %}
+{% load crispy_forms_tags %}
+{% load static %}
+
+{% block page_title %}BEME Preparation{% endblock %}
+
+{% block extra_css %}
+<style>
+    .beme-table {
+        font-size: 0.9rem;
+    }
+    .beme-table th {
+        background-color: #003087;
+        color: white;
+        font-weight: 600;
+        text-align: center;
+        vertical-align: middle;
+        padding: 8px 4px;
+    }
+    .beme-table td {
+        padding: 6px 4px;
+        vertical-align: middle;
+    }
+    .beme-input {
+        border: none;
+        border-bottom: 1px solid #dee2e6;
+        width: 100%;
+        padding: 4px;
+        background: transparent;
+    }
+    .beme-input:focus {
+        outline: none;
+        border-bottom: 2px solid #003087;
+        background-color: #f8f9fa;
+    }
+    .section-header {
+        background-color: #e9ecef !important;
+        font-weight: 600;
+        cursor: grab;
+    }
+    .section-header:active {
+        cursor: grabbing;
+    }
+    .subsection-header {
+        background-color: #f8f9fa !important;
+    }
+    .subsection-row {
+        cursor: grab;
+    }
+    .subsection-row:active {
+        cursor: grabbing;
+    }
+    .amount-cell {
+        text-align: right;
+        font-weight: 500;
+    }
+    .section-total-row {
+        background-color: #d4edda !important;
+        font-weight: 700;
+    }
+    .grand-total-row {
+        background-color: #c3e6cb !important;
+        font-weight: 800;
+        font-size: 1.1rem;
+    }
+    .add-row-btn {
+        font-size: 0.8rem;
+        padding: 2px 8px;
+    }
+    .remove-btn {
+        color: #dc3545;
+        background: none;
+        border: none;
+        padding: 0 4px;
+        cursor: pointer;
+    }
+    .edit-btn {
+        color: #003087;
+        background: none;
+        border: none;
+        padding: 0 4px;
+        cursor: pointer;
+    }
+    .currency {
+        font-family: 'Courier New', monospace;
+    }
+    #amount-in-words {
+        font-style: italic;
+        color: #495057;
+        border-top: 2px solid #003087;
+        padding-top: 10px;
+        margin-top: 15px;
+    }
+
+    .sn-display {
+        font-weight: 600;
+        font-family: 'Courier New', monospace;
+        font-size: 0.9rem;
+    }
+
+    .section-title {
+        font-weight: 600;
+        color: #003087;
+        border: 1px solid transparent;
+        border-radius: 4px;
+        padding: 4px 8px;
+        background: transparent;
+        width: auto;
+        min-width: 200px;
+    }
+    
+    .section-title:hover {
+        border: 1px solid #dee2e6;
+        background-color: white;
+    }
+    
+    .section-title:focus {
+        border-color: #003087;
+        box-shadow: 0 0 0 0.2rem rgba(0, 48, 135, 0.25);
+        background-color: white;
+    }
+    
+    .drag-handle {
+        color: #6c757d;
+        cursor: grab;
+        margin-right: 8px;
+    }
+    
+    .drag-handle:active {
+        cursor: grabbing;
+    }
+    
+    .staff-search {
+        position: relative;
+    }
+    
+    .staff-results {
+        position: absolute;
+        top: 100%;
+        left: 0;
+        right: 0;
+        max-height: 200px;
+        overflow-y: auto;
+        background: white;
+        border: 1px solid #dee2e6;
+        border-radius: 4px;
+        display: none;
+        z-index: 1000;
+    }
+    
+    .staff-item {
+    padding: 10px 15px;
+    cursor: pointer;
+    border-bottom: 1px solid #f0f0f0;
+    transition: background-color 0.2s;
+    }
+
+    .staff-item:hover {
+        background-color: #f8f9fa;
+    }
+
+    .staff-item:last-child {
+        border-bottom: none;
+    }
+
+    .badge.bg-success {
+        background-color: #28a745 !important;
+        font-size: 0.7rem;
+        padding: 3px 6px;
+    }
+    
+    .selected-staff {
+        background-color: #e9ecef;
+        padding: 8px 12px;
+        border-radius: 4px;
+        margin-top: 8px;
+    }
+    
+    .subsection-total-row {
+        background-color: #f8f9fa;
+        font-weight: 600;
+        border-top: 2px solid #dee2e6;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- BEME Header -->
+    <div class="card mb-4">
+        <div class="card-header bg-warning text-dark">
+            <div class="text-center">
+                <h3 class="mb-1">BILL OF ENGINEERING MEASUREMENT & EVALUATION (BEME)</h3>
+                <h5 class="mb-0">{{ project.title }}</h5>
+                <small>Project ID: {{ project.project_id }}</small>
+            </div>
+        </div>
+        <div class="card-body">
+            <form method="post" enctype="multipart/form-data" id="beme-form">
+                {% csrf_token %}
+                
+                <!-- BEME Metadata -->
+                <div class="row mb-4">
+                    <div class="col-md-4">
+                        <div class="form-group">
+                            <label class="form-label">BEME Number</label>
+                            <input type="text" class="form-control" id="beme_number" 
+                                   value="BEME/{{ project.project_id }}/{% now 'Y' %}/{{ beme_sequence }}" readonly>
+                            <input type="hidden" name="beme_number" value="BEME/{{ project.project_id }}/{% now 'Y' %}/{{ beme_sequence }}">
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="form-group">
+                            <label class="form-label">BEME Prepared By</label>
+                            <input type="text" class="form-control" value="{{ request.user.get_full_name|default:request.user.username }}" readonly>
+                            <input type="hidden" name="prepared_by" value="{{ request.user.id }}">
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="form-group">
+                            <label class="form-label">Forward To</label>
+                            <div class="staff-search">
+                                <input type="text" class="form-control" id="staff-search-input" 
+                                       placeholder="Search for staff...">
+                                <div class="staff-results" id="staff-results"></div>
+                                <div class="selected-staff" id="selected-staff" style="display: none;">
+                                    <input type="hidden" name="forward_to" id="forward-to-input">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- BEME Table -->
+                <div class="card mb-4">
+                    <div class="card-header bg-light d-flex justify-content-between align-items-center">
+                        <h6 class="mb-0"><i class="bi bi-table me-2"></i>BEME Items</h6>
+                        <button type="button" class="btn btn-sm btn-primary" id="add-section-btn">
+                            <i class="bi bi-plus-circle me-1"></i>Add Section
+                        </button>
+                    </div>
+                    <div class="card-body p-0">
+                        <div class="table-responsive">
+                            <table class="table table-bordered beme-table" id="beme-table">
+                                <thead>
+                                    <tr>
+                                        <th width="5%">S/N</th>
+                                        <th width="35%">DESCRIPTION OF ITEM</th>
+                                        <th width="10%">QTY</th>
+                                        <th width="10%">UNIT</th>
+                                        <th width="15%">RATE (₦)</th>
+                                        <th width="15%">AMOUNT (₦)</th>
+                                        <th width="5%">ACTION</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="beme-items">
+                                    <!-- Sections and items will be added here -->
+                                </tbody>
+                                <tfoot>
+                                    <tr class="section-total-row" id="grand-total-row">
+                                        <td colspan="5" class="text-end"><strong>GRAND TOTAL:</strong></td>
+                                        <td class="amount-cell"><span id="grand-total-amount">₦0.00</span></td>
+                                        <td></td>
+                                    </tr>
+                                </tfoot>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Summary Section -->
+                <div class="card mb-4">
+                    <div class="card-header bg-light">
+                        <h6 class="mb-0"><i class="bi bi-calculator me-2"></i>Summary</h6>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-8">
+                                <div id="summary-table"></div>
+                                <div id="amount-in-words" class="mt-3"></div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="card">
+                                    <div class="card-body">
+                                        <h6>Financial Summary</h6>
+                                        <table class="table table-sm">
+                                            <tr>
+                                                <td>Sub-Total:</td>
+                                                <td class="text-right"><span id="subtotal">₦0.00</span></td>
+                                            </tr>
+                                            <tr>
+                                                <td>Contingency (5%):</td>
+                                                <td class="text-right"><span id="contingency">₦0.00</span></td>
+                                            </tr>
+                                            <tr>
+                                                <td>VAT (7.5%):</td>
+                                                <td class="text-right"><span id="vat">₦0.00</span></td>
+                                            </tr>
+                                            <tr class="table-active">
+                                                <td><strong>GRAND TOTAL:</strong></td>
+                                                <td class="text-right"><strong><span id="grand-total">₦0.00</span></strong></td>
+                                            </tr>
+                                        </table>
+                                        
+                                        <div class="mt-3">
+                                            <div class="form-check form-check-inline">
+                                                <input class="form-check-input" type="checkbox" id="include-contingency" checked>
+                                                <label class="form-check-label" for="include-contingency">Include Contingency</label>
+                                            </div>
+                                            <div class="form-check form-check-inline">
+                                                <input class="form-check-input" type="checkbox" id="include-vat" checked>
+                                                <label class="form-check-label" for="include-vat">Include VAT</label>
+                                            </div>
+                                        </div>
+                                        
+                                        <div class="mt-3">
+                                            <label class="form-label">Contingency %</label>
+                                            <input type="number" class="form-control form-control-sm" id="contingency-percent" value="5" min="0" max="100" step="0.5">
+                                        </div>
+                                        <div class="mt-2">
+                                            <label class="form-label">VAT %</label>
+                                            <input type="number" class="form-control form-control-sm" id="vat-percent" value="7.5" min="0" max="100" step="0.5">
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="row">
+                    <div class="col-md-12">
+                        {{ form.notes|as_crispy_field }}
+                    </div>
+                </div>
+                
+                <!-- Hidden fields to store BEME data -->
+                <input type="hidden" name="beme_data" id="beme-data">
+                <input type="hidden" name="section_order" id="section-order">
+                
+                <!-- Action Buttons -->
+                <div class="mt-4">
+                    <button type="submit" class="btn btn-npa">
+                        <i class="bi bi-save me-2"></i>Save BEME
+                    </button>
+                    <button type="button" class="btn btn-success ms-2" id="generate-pdf">
+                        <i class="bi bi-file-pdf me-2"></i>Generate PDF
+                    </button>
+                    <a href="{% url 'project_detail' project_id=project.project_id %}" 
+                       class="btn btn-outline-secondary ms-2">
+                        Cancel
+                    </a>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // Global variables
+    let sectionCounter = 0;
+    let sortableInstances = [];
+    
+    const UNIT_OPTIONS = ['item', 'nos', 'sqm', 'm', 'm2', 'm3', 'kg', 'ton', 'day', 'hour', 'lot'];
+    
+    // Staff data (this would come from Django context)
+    const staffData = JSON.parse('{{ staff_list|escapejs }}' || '[]');
+    
+    // Number to words function (unchanged)
+    function numberToWords(num) {
+        const ones = ['', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine', 'Ten',
+                     'Eleven', 'Twelve', 'Thirteen', 'Fourteen', 'Fifteen', 'Sixteen', 'Seventeen', 
+                     'Eighteen', 'Nineteen'];
+        const tens = ['', '', 'Twenty', 'Thirty', 'Forty', 'Fifty', 'Sixty', 'Seventy', 'Eighty', 'Ninety'];
+        
+        if (num === 0) return 'Zero Naira Only';
+        
+        function convertLessThanOneThousand(n) {
+            if (n === 0) return '';
+            let result = '';
+            
+            if (n >= 100) {
+                result += ones[Math.floor(n / 100)] + ' Hundred ';
+                n %= 100;
+            }
+            
+            if (n >= 20) {
+                result += tens[Math.floor(n / 10)] + ' ';
+                n %= 10;
+            }
+            
+            if (n > 0) {
+                result += ones[n] + ' ';
+            }
+            
+            return result.trim();
+        }
+        
+        let naira = Math.floor(num);
+        let kobo = Math.round((num - naira) * 100);
+        
+        if (naira === 0 && kobo === 0) return 'Zero Naira Only';
+        
+        let result = '';
+        
+        if (naira >= 1000000) {
+            result += convertLessThanOneThousand(Math.floor(naira / 1000000)) + ' Million ';
+            naira %= 1000000;
+        }
+        
+        if (naira >= 1000) {
+            result += convertLessThanOneThousand(Math.floor(naira / 1000)) + ' Thousand ';
+            naira %= 1000;
+        }
+        
+        if (naira > 0) {
+            result += convertLessThanOneThousand(naira) + ' ';
+        }
+        
+        result += 'Naira';
+        
+        if (kobo > 0) {
+            result += ' ' + convertLessThanOneThousand(kobo) + ' Kobo';
+        }
+        
+        return result + ' Only';
+    }
+    
+    // Format currency
+    function formatCurrency(amount) {
+        return '₦' + parseFloat(amount).toLocaleString('en-NG', {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2
+        });
+    }
+    
+    // Calculate row amount
+    function calculateRowAmount(quantity, rate) {
+        const qty = parseFloat(quantity) || 0;
+        const rt = parseFloat(rate) || 0;
+        return qty * rt;
+    }
+    
+    // Update row calculations
+    function updateRowCalculations(row) {
+        const qty = row.querySelector('.quantity-input').value;
+        const rate = row.querySelector('.rate-input').value;
+        const amount = calculateRowAmount(qty, rate);
+        
+        row.querySelector('.amount-display').textContent = formatCurrency(amount);
+        row.querySelector('.amount-input').value = amount.toFixed(2);
+        
+        updateSectionTotals();
+        updateSummary();
+    }
+    
+    // Update section totals
+    function updateSectionTotals() {
+        const sections = document.querySelectorAll('.section-header');
+        
+        sections.forEach(section => {
+            let sectionTotal = 0;
+            let nextRow = section.nextElementSibling;
+            
+            while (nextRow && !nextRow.classList.contains('section-header')) {
+                if (nextRow.classList.contains('subsection-row')) {
+                    const amount = parseFloat(nextRow.querySelector('.amount-input')?.value) || 0;
+                    sectionTotal += amount;
+                }
+                nextRow = nextRow.nextElementSibling;
+            }
+            
+            // Update or create section total row
+            const sectionId = section.dataset.sectionId;
+            updateSectionTotalRow(section, sectionTotal);
+        });
+    }
+    
+    // Update section total row
+    function updateSectionTotalRow(section, total) {
+        let totalRow = section.nextElementSibling;
+        while (totalRow && !totalRow.classList.contains('section-total-row')) {
+            totalRow = totalRow.nextElementSibling;
+        }
+        
+        if (!totalRow) {
+            totalRow = document.createElement('tr');
+            totalRow.className = 'section-total-row';
+            totalRow.innerHTML = `
+                <td colspan="5" class="text-end"><strong>Section Total:</strong></td>
+                <td class="amount-cell"><span class="section-total-amount">${formatCurrency(total)}</span></td>
+                <td></td>
+            `;
+            section.parentNode.insertBefore(totalRow, section.nextElementSibling);
+        } else {
+            totalRow.querySelector('.section-total-amount').textContent = formatCurrency(total);
+        }
+    }
+    
+    // Update summary calculations
+    function updateSummary() {
+        let subTotal = 0;
+        const sectionTotals = {};
+        
+        const sections = document.querySelectorAll('.section-header');
+        sections.forEach(section => {
+            const sectionName = section.querySelector('.section-title').value || 'Untitled Section';
+            let sectionTotal = 0;
+            
+            let nextRow = section.nextElementSibling;
+            while (nextRow && !nextRow.classList.contains('section-header')) {
+                if (nextRow.classList.contains('subsection-row')) {
+                    const amount = parseFloat(nextRow.querySelector('.amount-input')?.value) || 0;
+                    sectionTotal += amount;
+                }
+                nextRow = nextRow.nextElementSibling;
+            }
+            
+            sectionTotals[sectionName] = sectionTotal;
+            subTotal += sectionTotal;
+        });
+        
+        const contingencyPercent = parseFloat(document.getElementById('contingency-percent').value) || 0;
+        const vatPercent = parseFloat(document.getElementById('vat-percent').value) || 0;
+        const includeContingency = document.getElementById('include-contingency').checked;
+        const includeVAT = document.getElementById('include-vat').checked;
+        
+        const contingency = includeContingency ? subTotal * (contingencyPercent / 100) : 0;
+        const vat = includeVAT ? subTotal * (vatPercent / 100) : 0;
+        const grandTotal = subTotal + contingency + vat;
+        
+        document.getElementById('subtotal').textContent = formatCurrency(subTotal);
+        document.getElementById('contingency').textContent = formatCurrency(contingency);
+        document.getElementById('vat').textContent = formatCurrency(vat);
+        document.getElementById('grand-total').textContent = formatCurrency(grandTotal);
+        document.getElementById('grand-total-amount').textContent = formatCurrency(grandTotal);
+        
+        document.getElementById('amount-in-words').innerHTML = 
+            `<strong>Amount in Words:</strong> ${numberToWords(grandTotal)}`;
+        
+        updateSummaryTable(sectionTotals);
+        storeBEMEData();
+    }
+    
+    // Update summary table
+    function updateSummaryTable(sectionTotals) {
+        const summaryTable = document.getElementById('summary-table');
+        let html = '<table class="table table-sm"><thead><tr><th>Section</th><th class="text-right">Amount (₦)</th></tr></thead><tbody>';
+        
+        for (const [section, total] of Object.entries(sectionTotals)) {
+            html += `<tr><td>${section}</td><td class="text-right">${formatCurrency(total)}</td></tr>`;
+        }
+        
+        html += '</tbody></table>';
+        summaryTable.innerHTML = html;
+    }
+    
+    // Add new section
+    function addSection(sectionName = 'New Section') {
+        const sectionId = 'section_' + Date.now();
+        sectionCounter++;
+        
+        const tbody = document.getElementById('beme-items');
+        
+        const sectionRow = document.createElement('tr');
+        sectionRow.className = 'section-header';
+        sectionRow.dataset.sectionId = sectionId;
+        sectionRow.innerHTML = `
+            <td colspan="7">
+                <div class="d-flex align-items-center">
+                    <i class="bi bi-grip-vertical drag-handle"></i>
+                    <input type="text" class="form-control form-control-sm section-title" 
+                        value="${sectionName}" placeholder="Enter section title"
+                        onblur="saveSectionTitle(this)"
+                        onkeypress="if(event.key==='Enter') this.blur()">
+                    <div class="ms-auto">
+                        <button type="button" class="btn btn-sm btn-success add-row-btn me-2" 
+                                onclick="addSubsection('${sectionId}')">
+                            <i class="bi bi-plus"></i> Add Subsection
+                        </button>
+                        <button type="button" class="btn btn-sm btn-danger add-row-btn" 
+                                onclick="removeSection('${sectionId}')">
+                            <i class="bi bi-trash"></i> Remove
+                        </button>
+                    </div>
+                </div>
+            </td>
+        `;
+        
+        tbody.appendChild(sectionRow);
+        renumberRows();
+        initializeDragAndDrop();
+    }
+    
+    // Save section title when focus is lost
+    function saveSectionTitle(input) {
+        const value = input.value.trim();
+        if (!value) {
+            input.value = 'Untitled Section';
+        }
+        updateSummary();
+    }
+    
+    // Add subsection to section
+    function addSubsection(sectionId) {
+        const subsectionId = 'subsection_' + Date.now();
+        const sectionRow = document.querySelector(`tr[data-section-id="${sectionId}"]`);
+        const tbody = document.getElementById('beme-items');
+        
+        const subsectionRow = document.createElement('tr');
+        subsectionRow.className = 'subsection-row';
+        subsectionRow.dataset.subsectionId = subsectionId;
+        subsectionRow.innerHTML = `
+            <td class="text-center sn-display"></td>
+            <td>
+                <div class="d-flex align-items-start">
+                    <i class="bi bi-grip-vertical drag-handle mt-2"></i>
+                    <textarea class="beme-input description-input" rows="2" 
+                              placeholder="Item description" style="flex: 1;"></textarea>
+                </div>
+            </td>
+            <td>
+                <input type="number" class="beme-input quantity-input" step="0.01" min="0" 
+                    placeholder="0.00" oninput="updateRowCalculations(this.closest('tr'))">
+            </td>
+            <td>
+                <select class="form-select form-select-sm unit-select" 
+                        onchange="updateRowCalculations(this.closest('tr'))">
+                    ${UNIT_OPTIONS.map(unit => 
+                        `<option value="${unit}">${unit.toUpperCase()}</option>`
+                    ).join('')}
+                </select>
+            </td>
+            <td>
+                <input type="number" class="beme-input rate-input" step="0.01" min="0" 
+                    placeholder="0.00" oninput="updateRowCalculations(this.closest('tr'))">
+            </td>
+            <td class="amount-cell">
+                <span class="amount-display">₦0.00</span>
+                <input type="hidden" class="amount-input" value="0">
+            </td>
+            <td class="text-center">
+                <button type="button" class="remove-btn" onclick="removeSubsection('${subsectionId}')">
+                    <i class="bi bi-trash"></i>
+                </button>
+            </td>
+        `;
+        
+        // Insert after section row or after last item in section
+        let insertAfter = sectionRow;
+        let nextRow = sectionRow.nextElementSibling;
+        
+        while (nextRow && !nextRow.classList.contains('section-header') && 
+               !nextRow.classList.contains('section-total-row')) {
+            insertAfter = nextRow;
+            nextRow = nextRow.nextElementSibling;
+        }
+        
+        insertAfter.parentNode.insertBefore(subsectionRow, insertAfter.nextElementSibling);
+        
+        renumberRows();
+        initializeDragAndDrop();
+    }
+    
+    // Remove section and all its subsections
+    function removeSection(sectionId) {
+        if (confirm('Remove this section and all its items?')) {
+            const sectionRow = document.querySelector(`tr[data-section-id="${sectionId}"]`);
+            if (sectionRow) {
+                let nextRow = sectionRow.nextElementSibling;
+                while (nextRow && !nextRow.classList.contains('section-header')) {
+                    const toRemove = nextRow;
+                    nextRow = nextRow.nextElementSibling;
+                    toRemove.remove();
+                }
+                sectionRow.remove();
+                renumberRows();
+                updateSummary();
+            }
+        }
+    }
+    
+    // Remove subsection
+    function removeSubsection(subsectionId) {
+        if (confirm('Remove this item?')) {
+            const subsectionRow = document.querySelector(`tr[data-subsection-id="${subsectionId}"]`);
+            if (subsectionRow) {
+                subsectionRow.remove();
+                renumberRows();
+                updateSectionTotals();
+                updateSummary();
+            }
+        }
+    }
+    
+    // Renumber all rows
+    function renumberRows() {
+        let sectionNumber = 0;
+        const sections = document.querySelectorAll('.section-header');
+        
+        sections.forEach((section, sIndex) => {
+            sectionNumber++;
+            let itemNumber = 0;
+            let nextRow = section.nextElementSibling;
+            
+            while (nextRow && !nextRow.classList.contains('section-header')) {
+                if (nextRow.classList.contains('subsection-row')) {
+                    itemNumber++;
+                    nextRow.querySelector('.sn-display').textContent = `${sectionNumber}.${itemNumber}`;
+                }
+                nextRow = nextRow.nextElementSibling;
+            }
+        });
+    }
+    
+    // Initialize drag and drop
+    function initializeDragAndDrop() {
+        // Remove existing Sortable instances
+        sortableInstances.forEach(instance => instance.destroy());
+        sortableInstances = [];
+        
+        const tbody = document.getElementById('beme-items');
+        
+        // Make sections sortable
+        const sectionSortable = Sortable.create(tbody, {
+            handle: '.section-header .drag-handle',
+            items: '.section-header',
+            animation: 150,
+            onEnd: function() {
+                renumberRows();
+                updateSectionTotals();
+                updateSummary();
+            }
+        });
+        sortableInstances.push(sectionSortable);
+        
+        // Make subsections sortable within each section
+        const sections = document.querySelectorAll('.section-header');
+        sections.forEach(section => {
+            const sectionId = section.dataset.sectionId;
+            let subsectionContainer = document.createElement('div');
+            
+            // Get all rows between this section and next section
+            let rows = [];
+            let nextRow = section.nextElementSibling;
+            while (nextRow && !nextRow.classList.contains('section-header')) {
+                if (nextRow.classList.contains('subsection-row')) {
+                    rows.push(nextRow);
+                }
+                nextRow = nextRow.nextElementSibling;
+            }
+            
+            // Create container for subsections
+            rows.forEach(row => {
+                row.dataset.sectionId = sectionId;
+            });
+            
+            // Make subsections sortable within their section
+            const subsectionSortable = Sortable.create(tbody, {
+                handle: '.subsection-row .drag-handle',
+                items: '.subsection-row',
+                draggable: '.subsection-row',
+                group: {
+                    name: 'subsections',
+                    pull: true,
+                    revertClone: false
+                },
+                animation: 150,
+                onEnd: function(evt) {
+                    // Ensure dragged item stays in same section
+                    const draggedRow = evt.item;
+                    const targetSection = evt.to;
+                    
+                    // Find the section for this row
+                    let sectionRow = draggedRow.previousElementSibling;
+                    while (sectionRow && !sectionRow.classList.contains('section-header')) {
+                        sectionRow = sectionRow.previousElementSibling;
+                    }
+                    
+                    if (sectionRow) {
+                        draggedRow.dataset.sectionId = sectionRow.dataset.sectionId;
+                    }
+                    
+                    renumberRows();
+                    updateSectionTotals();
+                    updateSummary();
+                }
+            });
+            sortableInstances.push(subsectionSortable);
+        });
+    }
+    
+    // Store BEME data
+    function storeBEMEData() {
+        const bemeData = [];
+        const sections = document.querySelectorAll('.section-header');
+        const sectionOrder = [];
+        
+        sections.forEach(section => {
+            const sectionName = section.querySelector('.section-title').value;
+            sectionOrder.push(sectionName);
+            
+            let nextRow = section.nextElementSibling;
+            while (nextRow && !nextRow.classList.contains('section-header')) {
+                if (nextRow.classList.contains('subsection-row')) {
+                    bemeData.push({
+                        sn: nextRow.querySelector('.sn-display').textContent,
+                        section: sectionName,
+                        description: nextRow.querySelector('.description-input').value,
+                        quantity: nextRow.querySelector('.quantity-input').value || '0',
+                        unit: nextRow.querySelector('.unit-select').value,
+                        rate: nextRow.querySelector('.rate-input').value || '0',
+                        amount: nextRow.querySelector('.amount-input').value || '0'
+                    });
+                }
+                nextRow = nextRow.nextElementSibling;
+            }
+        });
+        
+        document.getElementById('beme-data').value = JSON.stringify(bemeData);
+        document.getElementById('section-order').value = JSON.stringify(sectionOrder);
+    }
+    
+    // Staff search functionality
+    function initializeStaffSearch() {
+        const searchInput = document.getElementById('staff-search-input');
+        const resultsDiv = document.getElementById('staff-results');
+        const selectedDiv = document.getElementById('selected-staff');
+        const forwardToInput = document.getElementById('forward-to-input');
+        
+        if (!searchInput) return;
+        
+        searchInput.addEventListener('input', function() {
+            const query = this.value.toLowerCase().trim();
+            
+            if (query.length < 2) {
+                resultsDiv.style.display = 'none';
+                return;
+            }
+            
+            // Search in name, email, office, department, and employee ID
+            const filtered = staffData.filter(staff => 
+                staff.name.toLowerCase().includes(query) || 
+                (staff.email && staff.email.toLowerCase().includes(query)) ||
+                (staff.office && staff.office.toLowerCase().includes(query)) ||
+                (staff.department && staff.department.toLowerCase().includes(query)) ||
+                (staff.employee_id && staff.employee_id.toLowerCase().includes(query)) ||
+                (staff.grade_level && staff.grade_level.toLowerCase().includes(query)) ||
+                (staff.display_text && staff.display_text.toLowerCase().includes(query))
+            );
+            
+            if (filtered.length > 0) {
+                let html = '';
+                filtered.slice(0, 10).forEach(staff => {
+                    // Show approver badge if they are an approving officer
+                    const approverBadge = staff.is_approving_officer ? 
+                        '<span class="badge bg-success ms-1">Approver</span>' : '';
+                    
+                    html += `<div class="staff-item" data-id="${staff.id}" data-name="${staff.name}">
+                        <div class="d-flex justify-content-between align-items-start">
+                            <div>
+                                <strong>${staff.name}</strong> ${approverBadge}<br>
+                                <small class="text-muted">
+                                    ${staff.office || ''} 
+                                    ${staff.department ? `- ${staff.department}` : ''}
+                                    ${staff.employee_id ? `<br>ID: ${staff.employee_id}` : ''}
+                                    ${staff.email ? `<br>${staff.email}` : ''}
+                                </small>
+                            </div>
+                        </div>
+                    </div>`;
+                });
+                resultsDiv.innerHTML = html;
+                resultsDiv.style.display = 'block';
+            } else {
+                resultsDiv.innerHTML = '<div class="staff-item text-muted">No staff found</div>';
+                resultsDiv.style.display = 'block';
+            }
+        });
+        
+        resultsDiv.addEventListener('click', function(e) {
+            const staffItem = e.target.closest('.staff-item');
+            if (staffItem && staffItem.dataset.id) {
+                const staffName = staffItem.dataset.name;
+                const staffId = staffItem.dataset.id;
+                
+                // Get the full staff record
+                const selectedStaff = staffData.find(s => s.id == staffId);
+                
+                let displayHtml = `<span><strong>Forwarded to:</strong> ${staffName}`;
+                
+                if (selectedStaff) {
+                    displayHtml += `<br><small class="text-muted">
+                        ${selectedStaff.office || ''} 
+                        ${selectedStaff.department ? `- ${selectedStaff.department}` : ''}
+                    </small>`;
+                }
+                
+                displayHtml += `</span>
+                    <button type="button" class="btn btn-sm btn-link text-danger float-end" onclick="clearForwardTo()">
+                        <i class="bi bi-x"></i>
+                    </button>`;
+                
+                selectedDiv.innerHTML = displayHtml;
+                selectedDiv.style.display = 'block';
+                forwardToInput.value = staffId;
+                
+                resultsDiv.style.display = 'none';
+                searchInput.value = '';
+            }
+        });
+        
+        // Close results when clicking outside
+        document.addEventListener('click', function(e) {
+            if (!e.target.closest('.staff-search')) {
+                resultsDiv.style.display = 'none';
+            }
+        });
+    }
+    
+    // Clear forward to selection
+    function clearForwardTo() {
+        document.getElementById('selected-staff').style.display = 'none';
+        document.getElementById('forward-to-input').value = '';
+    }
+    
+    // Initialize page
+    document.addEventListener('DOMContentLoaded', function() {
+        // Add Sortable library
+        const script = document.createElement('script');
+        script.src = 'https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js';
+        script.onload = function() {
+            // Add sample sections
+            addSection('Civil Works');
+            addSection('Electrical Works');
+            addSection('Mechanical Works');
+        };
+        document.head.appendChild(script);
+        
+        // Initialize staff search
+        initializeStaffSearch();
+        
+        // Add section button
+        document.getElementById('add-section-btn').addEventListener('click', function() {
+            const sectionName = prompt('Enter section name:', 'New Section');
+            if (sectionName && sectionName.trim()) {
+                addSection(sectionName.trim());
+            }
+        });
+        
+        // Percentage listeners
+        document.getElementById('contingency-percent').addEventListener('input', updateSummary);
+        document.getElementById('vat-percent').addEventListener('input', updateSummary);
+        document.getElementById('include-contingency').addEventListener('change', updateSummary);
+        document.getElementById('include-vat').addEventListener('change', updateSummary);
+        
+        // Form validation
+        document.getElementById('beme-form').addEventListener('submit', function(e) {
+            const forwardTo = document.getElementById('forward-to-input').value;
+            
+            if (!forwardTo) {
+                e.preventDefault();
+                alert('Please select a staff member to forward this BEME to');
+                document.getElementById('staff-search-input').focus();
+                return false;
+            }
+            
+            storeBEMEData();
+        });
+    });
+    
+    // PDF Generation
+    document.getElementById('generate-pdf').addEventListener('click', function(e) {
+        e.preventDefault();
+        storeBEMEData();
+        
+        const btn = this;
+        const originalText = btn.innerHTML;
+        btn.innerHTML = '<i class="bi bi-hourglass me-2"></i>Generating PDF...';
+        btn.disabled = true;
+        
+        const pdfInput = document.createElement('input');
+        pdfInput.type = 'hidden';
+        pdfInput.name = 'generate_pdf';
+        pdfInput.value = 'true';
+        document.getElementById('beme-form').appendChild(pdfInput);
+        
+        document.getElementById('beme-form').submit();
+        
+        setTimeout(() => {
+            btn.innerHTML = originalText;
+            btn.disabled = false;
+            pdfInput.remove();
+        }, 3000);
+    });
+</script>
+{% endblock %}

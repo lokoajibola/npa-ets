@@ -46,7 +46,7 @@ def dashboard(request):
         pending_approvals = 0
     
     # Recent projects
-    recent_projects = projects.order_by('-created_at')[:5]
+    recent_projects = list(projects.order_by('-created_at')[:5])
     
     # Budget statistics (simplified)
     total_budget = sum([p.estimated_budget for p in projects])
@@ -58,7 +58,7 @@ def dashboard(request):
         'active_projects': active_projects,
         'overdue_projects': overdue_projects,
         'pending_approvals': pending_approvals,
-        'recent_projects': recent_projects,
+        'recent_projects': [],
         'total_budget': total_budget,
         'spent_budget': spent_budget,
         'page_title': 'Dashboard',
