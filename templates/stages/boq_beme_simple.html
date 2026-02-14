@@ -217,17 +217,7 @@
                         </div>
                     </div>
                     <div class="col-md-4">
-                        <div class="form-group">
-                            <label class="form-label">Forward To</label>
-                            <div class="staff-search">
-                                <input type="text" class="form-control" id="staff-search-input" 
-                                       placeholder="Search for staff...">
-                                <div class="staff-results" id="staff-results"></div>
-                                <div class="selected-staff" id="selected-staff" style="display: none;">
-                                    <input type="hidden" name="forward_to" id="forward-to-input">
-                                </div>
-                            </div>
-                        </div>
+                        
                     </div>
                 </div>
                 
@@ -330,7 +320,22 @@
                 
                 <div class="row">
                     <div class="col-md-12">
-                        {{ form.notes|as_crispy_field }}
+                        <div class="form-group">
+                            <label class="form-label">Notes</label>
+                            <textarea name="notes" class="form-control" rows="3">{{ stage.notes }}</textarea>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="row mt-3">
+                    <div class="col-md-6">
+                        <div class="form-group">
+                            <label class="form-label">BEME Document (PDF)</label>
+                            <input type="file" name="document" class="form-control" accept=".pdf">
+                            {% if stage.document %}
+                            <small class="text-muted">Current file: {{ stage.document.name }}</small>
+                            {% endif %}
+                        </div>
                     </div>
                 </div>
                 
@@ -355,6 +360,8 @@
         </div>
     </div>
 </div>
+
+
 {% endblock %}
 
 {% block extra_js %}
@@ -366,7 +373,28 @@
     const UNIT_OPTIONS = ['item', 'nos', 'sqm', 'm', 'm2', 'm3', 'kg', 'ton', 'day', 'hour', 'lot'];
     
     // Staff data (this would come from Django context)
-    const staffData = JSON.parse('{{ staff_list|escapejs }}' || '[]');
+    {% comment %} let staffData = [];
+    {% if staff_list %}
+        try {
+            staffData = JSON.parse('{{ staff_list|safe }}');
+            console.log('Staff data loaded:', staffData.length, 'records');
+        } catch(e) {
+            console.error('Error parsing staff data:', e);
+            staffData = [];
+        }
+    {% endif %} {% endcomment %}
+
+    // Initial items data
+    let initialItems = [];
+    {% if initial_items %}
+        try {
+            initialItems = JSON.parse('{{ initial_items|escapejs }}');
+            console.log('Initial items loaded:', initialItems.length, 'records');
+        } catch(e) {
+            console.error('Error parsing initial items:', e);
+            initialItems = [];
+        }
+    {% endif %}
     
     // Number to words function (unchanged)
     function numberToWords(num) {
@@ -715,6 +743,52 @@
         });
     }
     
+    // Load existing items from database
+    function loadExistingItems() {
+        // Group items by section
+        const sections = {};
+        initialItems.forEach(item => {
+            if (!sections[item.section]) {
+                sections[item.section] = [];
+            }
+            sections[item.section].push(item);
+        });
+        
+        // Create sections and add items
+        Object.keys(sections).forEach(sectionName => {
+            addSection(sectionName);
+            
+            // Find the section we just added
+            const sectionRows = document.querySelectorAll('.section-header');
+            const sectionRow = sectionRows[sectionRows.length - 1];
+            const sectionId = sectionRow.dataset.sectionId;
+            
+            // Add items to this section
+            sections[sectionName].forEach(item => {
+                addSubsection(sectionId);
+                
+                // Find the last added subsection
+                const subsectionRows = document.querySelectorAll('.subsection-row');
+                const newRow = subsectionRows[subsectionRows.length - 1];
+                
+                // Populate data
+                if (item.description) newRow.querySelector('.description-input').value = item.description;
+                if (item.quantity) newRow.querySelector('.quantity-input').value = item.quantity;
+                if (item.rate) newRow.querySelector('.rate-input').value = item.rate;
+                
+                const unitSelect = newRow.querySelector('.unit-select');
+                if (item.unit && unitSelect) {
+                    unitSelect.value = item.unit;
+                }
+                
+                updateRowCalculations(newRow);
+            });
+        });
+        
+        renumberRows();
+        updateSummary();
+    }
+
     // Initialize drag and drop
     function initializeDragAndDrop() {
         // Remove existing Sortable instances
@@ -823,124 +897,25 @@
         document.getElementById('section-order').value = JSON.stringify(sectionOrder);
     }
     
-    // Staff search functionality
-    function initializeStaffSearch() {
-        const searchInput = document.getElementById('staff-search-input');
-        const resultsDiv = document.getElementById('staff-results');
-        const selectedDiv = document.getElementById('selected-staff');
-        const forwardToInput = document.getElementById('forward-to-input');
-        
-        if (!searchInput) return;
-        
-        searchInput.addEventListener('input', function() {
-            const query = this.value.toLowerCase().trim();
-            
-            if (query.length < 2) {
-                resultsDiv.style.display = 'none';
-                return;
-            }
-            
-            // Search in name, email, office, department, and employee ID
-            const filtered = staffData.filter(staff => 
-                staff.name.toLowerCase().includes(query) || 
-                (staff.email && staff.email.toLowerCase().includes(query)) ||
-                (staff.office && staff.office.toLowerCase().includes(query)) ||
-                (staff.department && staff.department.toLowerCase().includes(query)) ||
-                (staff.employee_id && staff.employee_id.toLowerCase().includes(query)) ||
-                (staff.grade_level && staff.grade_level.toLowerCase().includes(query)) ||
-                (staff.display_text && staff.display_text.toLowerCase().includes(query))
-            );
-            
-            if (filtered.length > 0) {
-                let html = '';
-                filtered.slice(0, 10).forEach(staff => {
-                    // Show approver badge if they are an approving officer
-                    const approverBadge = staff.is_approving_officer ? 
-                        '<span class="badge bg-success ms-1">Approver</span>' : '';
-                    
-                    html += `<div class="staff-item" data-id="${staff.id}" data-name="${staff.name}">
-                        <div class="d-flex justify-content-between align-items-start">
-                            <div>
-                                <strong>${staff.name}</strong> ${approverBadge}<br>
-                                <small class="text-muted">
-                                    ${staff.office || ''} 
-                                    ${staff.department ? `- ${staff.department}` : ''}
-                                    ${staff.employee_id ? `<br>ID: ${staff.employee_id}` : ''}
-                                    ${staff.email ? `<br>${staff.email}` : ''}
-                                </small>
-                            </div>
-                        </div>
-                    </div>`;
-                });
-                resultsDiv.innerHTML = html;
-                resultsDiv.style.display = 'block';
-            } else {
-                resultsDiv.innerHTML = '<div class="staff-item text-muted">No staff found</div>';
-                resultsDiv.style.display = 'block';
-            }
-        });
-        
-        resultsDiv.addEventListener('click', function(e) {
-            const staffItem = e.target.closest('.staff-item');
-            if (staffItem && staffItem.dataset.id) {
-                const staffName = staffItem.dataset.name;
-                const staffId = staffItem.dataset.id;
-                
-                // Get the full staff record
-                const selectedStaff = staffData.find(s => s.id == staffId);
-                
-                let displayHtml = `<span><strong>Forwarded to:</strong> ${staffName}`;
-                
-                if (selectedStaff) {
-                    displayHtml += `<br><small class="text-muted">
-                        ${selectedStaff.office || ''} 
-                        ${selectedStaff.department ? `- ${selectedStaff.department}` : ''}
-                    </small>`;
-                }
-                
-                displayHtml += `</span>
-                    <button type="button" class="btn btn-sm btn-link text-danger float-end" onclick="clearForwardTo()">
-                        <i class="bi bi-x"></i>
-                    </button>`;
-                
-                selectedDiv.innerHTML = displayHtml;
-                selectedDiv.style.display = 'block';
-                forwardToInput.value = staffId;
-                
-                resultsDiv.style.display = 'none';
-                searchInput.value = '';
-            }
-        });
-        
-        // Close results when clicking outside
-        document.addEventListener('click', function(e) {
-            if (!e.target.closest('.staff-search')) {
-                resultsDiv.style.display = 'none';
-            }
-        });
-    }
     
-    // Clear forward to selection
-    function clearForwardTo() {
-        document.getElementById('selected-staff').style.display = 'none';
-        document.getElementById('forward-to-input').value = '';
-    }
-    
+    // Initialize page
     // Initialize page
     document.addEventListener('DOMContentLoaded', function() {
         // Add Sortable library
         const script = document.createElement('script');
         script.src = 'https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js';
         script.onload = function() {
-            // Add sample sections
-            addSection('Civil Works');
-            addSection('Electrical Works');
-            addSection('Mechanical Works');
+            // Load existing items or add sample sections
+            if (initialItems && initialItems.length > 0) {
+                loadExistingItems();
+            } else {
+                addSection('Civil Works');
+                addSection('Electrical Works');
+                addSection('Mechanical Works');
+            }
+            initializeDragAndDrop();
         };
         document.head.appendChild(script);
-        
-        // Initialize staff search
-        initializeStaffSearch();
         
         // Add section button
         document.getElementById('add-section-btn').addEventListener('click', function() {
@@ -956,44 +931,40 @@
         document.getElementById('include-contingency').addEventListener('change', updateSummary);
         document.getElementById('include-vat').addEventListener('change', updateSummary);
         
-        // Form validation
+        // Form submission - REMOVED forward-to validation
         document.getElementById('beme-form').addEventListener('submit', function(e) {
-            const forwardTo = document.getElementById('forward-to-input').value;
-            
-            if (!forwardTo) {
-                e.preventDefault();
-                alert('Please select a staff member to forward this BEME to');
-                document.getElementById('staff-search-input').focus();
-                return false;
-            }
-            
             storeBEMEData();
+            // Form will submit normally
         });
     });
-    
+        
+        // PDF Generation
     // PDF Generation
     document.getElementById('generate-pdf').addEventListener('click', function(e) {
         e.preventDefault();
+        console.log('🔍 Debug: Generate PDF button clicked');
+        
+        // Store the BEME data first
         storeBEMEData();
+        console.log('✅ Debug: BEME data stored for PDF');
         
         const btn = this;
         const originalText = btn.innerHTML;
-        btn.innerHTML = '<i class="bi bi-hourglass me-2"></i>Generating PDF...';
+        btn.innerHTML = '<i class="bi bi-hourglass me-2"></i>Preparing PDF...';
         btn.disabled = true;
         
-        const pdfInput = document.createElement('input');
-        pdfInput.type = 'hidden';
-        pdfInput.name = 'generate_pdf';
-        pdfInput.value = 'true';
-        document.getElementById('beme-form').appendChild(pdfInput);
+        // Get the PDF URL
+        const pdfUrl = `/projects/{{ project.project_id }}/stage/boq-beme/{{ stage.stage_id }}/pdf/`;
+        console.log('🔍 Debug: Opening PDF URL:', pdfUrl);
         
-        document.getElementById('beme-form').submit();
+        // Open PDF in new tab
+        window.open(pdfUrl, '_blank');
         
+        // Re-enable button after a short delay
         setTimeout(() => {
             btn.innerHTML = originalText;
             btn.disabled = false;
-            pdfInput.remove();
-        }, 3000);
+        }, 2000);
     });
 </script>
 {% endblock %}

@@ -1,3 +1,4 @@
+<!-- templates/stages/contract_award.html -->
 {% extends 'base.html' %}
 {% load crispy_forms_tags %}
 
@@ -9,7 +10,7 @@
         <div class="card">
             <div class="card-header bg-success text-white">
                 <h5 class="card-title mb-0"><i class="bi bi-award me-2"></i>Contract Award</h5>
-                <small>Project: {{ project.title }}</small>
+                <small>Project: {{ project.title }} ({{ project.project_id }})</small>
             </div>
             <div class="card-body">
                 <form method="post" enctype="multipart/form-data">
@@ -17,7 +18,16 @@
                     
                     <div class="row mb-4">
                         <div class="col-md-4">{{ form.status|as_crispy_field }}</div>
-                        <div class="col-md-4">{{ form.contractor|as_crispy_field }}</div>
+                        <div class="col-md-4">
+                            <!-- Hide the actual contractor select if you want to show display field instead -->
+                            <div class="form-group">
+                                <label>Contractor</label>
+                                <input type="text" class="form-control" value="MESSRS " placeholder="MESSRS Contractor Name" id="contractor_search">
+                                <small class="text-muted">Start typing to search for existing contractors</small>
+                                <div id="contractor_results" class="dropdown-menu" style="width: 100%; display: none;"></div>
+                                {{ form.contractor|as_crispy_field }}
+                            </div>
+                        </div>
                         <div class="col-md-4">{{ form.contract_date|as_crispy_field }}</div>
                     </div>
                     
@@ -31,8 +41,9 @@
                                 <div class="col-md-6">{{ form.contract_amount|as_crispy_field }}</div>
                             </div>
                             <div class="row mt-3">
-                                <div class="col-md-6">{{ form.start_date|as_crispy_field }}</div>
-                                <div class="col-md-6">{{ form.completion_date|as_crispy_field }}</div>
+                                <div class="col-md-4">{{ form.start_date|as_crispy_field }}</div>
+                                <div class="col-md-4">{{ form.contract_duration|as_crispy_field }}</div>
+                                <div class="col-md-4">{{ form.completion_date|as_crispy_field }}</div>
                             </div>
                         </div>
                     </div>
@@ -56,6 +67,11 @@
                         </div>
                         <div class="card-body">
                             {{ form.document|as_crispy_field }}
+                            {% if stage.document %}
+                            <div class="mt-2">
+                                <small>Current file: <a href="{{ stage.document.url }}" target="_blank">{{ stage.document.name }}</a></small>
+                            </div>
+                            {% endif %}
                         </div>
                     </div>
                     
@@ -75,4 +91,110 @@
         </div>
     </div>
 </div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Contractor search functionality
+        const contractorSearch = document.getElementById('contractor_search');
+        const contractorSelect = document.getElementById('id_contractor');
+        const contractorResults = document.getElementById('contractor_results');
+        
+        // Hide the actual select
+        contractorSelect.style.display = 'none';
+        
+        // Get all contractors from the select options
+        const contractors = [];
+        for (let option of contractorSelect.options) {
+            if (option.value) {
+                contractors.push({
+                    id: option.value,
+                    name: option.text
+                });
+            }
+        }
+        
+        contractorSearch.addEventListener('input', function() {
+            const query = this.value.toLowerCase().replace('messrs ', '').trim();
+            
+            if (query.length < 2) {
+                contractorResults.style.display = 'none';
+                return;
+            }
+            
+            const filtered = contractors.filter(c => 
+                c.name.toLowerCase().includes(query)
+            );
+            
+            if (filtered.length > 0) {
+                let html = '';
+                filtered.slice(0, 10).forEach(c => {
+                    html += `<a href="#" class="dropdown-item" data-id="${c.id}" data-name="${c.name}">MESSRS ${c.name}</a>`;
+                });
+                contractorResults.innerHTML = html;
+                contractorResults.style.display = 'block';
+            } else {
+                // Option to create new contractor
+                html = `<a href="#" class="dropdown-item" data-new="true" data-name="${query}">+ Create new contractor: MESSRS ${query}</a>`;
+                contractorResults.innerHTML = html;
+                contractorResults.style.display = 'block';
+            }
+        });
+        
+        contractorResults.addEventListener('click', function(e) {
+            e.preventDefault();
+            const target = e.target.closest('.dropdown-item');
+            if (!target) return;
+            
+            if (target.dataset.new) {
+                // Create new contractor option
+                const newName = target.dataset.name;
+                contractorSearch.value = `MESSRS ${newName}`;
+                
+                // You might want to show a modal to enter full contractor details
+                alert('Please create the contractor first using the Contractor management page.');
+                
+            } else {
+                // Select existing contractor
+                const contractorId = target.dataset.id;
+                const contractorName = target.dataset.name;
+                
+                contractorSelect.value = contractorId;
+                contractorSearch.value = `MESSRS ${contractorName}`;
+            }
+            
+            contractorResults.style.display = 'none';
+        });
+        
+        // Close results when clicking outside
+        document.addEventListener('click', function(e) {
+            if (!e.target.closest('#contractor_search') && !e.target.closest('#contractor_results')) {
+                contractorResults.style.display = 'none';
+            }
+        });
+        
+        // Update completion date
+        const startDate = document.getElementById('id_start_date');
+        const duration = document.getElementById('id_contract_duration');
+        const completionDate = document.getElementById('id_completion_date');
+        
+        function updateCompletionDate() {
+            if (startDate.value && duration.value) {
+                const start = new Date(startDate.value);
+                const days = parseInt(duration.value);
+                const completion = new Date(start);
+                completion.setDate(start.getDate() + days);
+                
+                const year = completion.getFullYear();
+                const month = String(completion.getMonth() + 1).padStart(2, '0');
+                const day = String(completion.getDate()).padStart(2, '0');
+                completionDate.value = `${year}-${month}-${day}`;
+            }
+        }
+        
+        if (startDate && duration) {
+            startDate.addEventListener('change', updateCompletionDate);
+            duration.addEventListener('input', updateCompletionDate);
+        }
+    });
+</script>
 {% endblock %}

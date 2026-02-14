@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BEME - {{ project.project_id }}</title>
+    {% load static %}
+    {% load project_extras %}
+    <style>
+        @page {
+            size: A4;
+            margin: 1.5cm;
+        }
+        
+        body {
+            font-family: Verdana, Geneva, sans-serif;
+            font-size: 10pt;
+            line-height: 1.4;
+            color: #000;
+            background: #fff;
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+        }
+        
+        @media print {
+            body {
+                margin: 0;
+                padding: 0;
+            }
+            .no-print {
+                display: none !important;
+            }
+            .watermark {
+                position: fixed;
+                top: 50%;
+                left: 50%;
+                transform: translate(-50%, -50%) rotate(-45deg);
+                opacity: 0.1;
+                z-index: -1;
+            }
+            .watermark img {
+                width: 400px;
+                height: auto;
+            }
+        }
+        
+        /* Watermark for screen */
+        .watermark {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%) rotate(-45deg);
+            opacity: 0.1;
+            z-index: -1;
+            pointer-events: none;
+        }
+        
+        .watermark img {
+            width: 400px;
+            height: auto;
+        }
+        
+        .print-container {
+            max-width: 100%;
+            margin: 0 auto;
+            padding: 20px;
+            position: relative;
+            min-height: 100vh;
+        }
+        
+        .project-header {
+            text-align: center;
+            margin-bottom: 25px;
+        }
+        
+        .project-header h1 {
+            color: #003087;
+            font-size: 20pt;
+            margin: 5px 0;
+            font-weight: bold;
+        }
+        
+        .project-header h2 {
+            color: #003087;
+            font-size: 16pt;
+            margin: 5px 0;
+            font-weight: bold;
+        }
+        
+        .project-header h3 {
+            font-size: 14pt;
+            margin: 10px 0;
+            font-weight: bold;
+        }
+        
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 15px;
+            font-size: 9pt;
+        }
+        
+        th {
+            background-color: #003087 !important;
+            color: white !important;
+            font-weight: bold;
+            padding: 6px 4px;
+            text-align: center;
+            border: 1px solid #003087;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+        }
+        
+        td {
+            padding: 5px 4px;
+            border: 1px solid #ccc;
+            vertical-align: top;
+        }
+        
+        .section-header {
+            background-color: #e9ecef !important;
+            font-weight: bold;
+            font-size: 11pt;
+            padding: 8px;
+            border: 1px solid #ccc;
+            margin-top: 20px;
+            margin-bottom: 5px;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+        }
+        
+        .section-total {
+            background-color: #d4edda !important;
+            font-weight: bold;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+        }
+        
+        .amount {
+            text-align: right;
+            font-family: 'Courier New', monospace;
+        }
+        
+        .summary-table {
+            width: 50%;
+            float: right;
+            margin-top: 20px;
+        }
+        
+        .grand-total {
+            background-color: #c3e6cb !important;
+            font-weight: bold;
+            font-size: 11pt;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+        }
+        
+        .amount-words {
+            clear: both;
+            margin-top: 40px;
+            padding-top: 15px;
+            border-top: 2px solid #003087;
+            font-size: 10pt;
+        }
+        
+        .info-table {
+            width: 100%;
+            border: 1px solid #ccc;
+            margin-bottom: 25px;
+        }
+        
+        .info-table td {
+            padding: 6px 8px;
+        }
+        
+        .info-table td:first-child {
+            font-weight: bold;
+            width: 15%;
+        }
+        
+        .footer {
+            margin-top: 40px;
+            font-size: 8pt;
+            color: #666;
+            border-top: 1px solid #ccc;
+            padding-top: 10px;
+        }
+        
+        .print-button {
+            background-color: #003087;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12pt;
+            margin-right: 10px;
+            margin-bottom: 20px;
+        }
+        
+        .print-button:hover {
+            background-color: #002060;
+        }
+        
+        .close-button {
+            background-color: #6c757d;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12pt;
+            margin-bottom: 20px;
+        }
+    </style>
+</head>
+<body>
+    <!-- Watermark -->
+    <div class="watermark">
+        <img src="{% static 'images/npa3.png' %}" alt="NPA Logo">
+    </div>
+
+    <div class="print-container">
+        <!-- Print Controls (hidden when printing) -->
+        <div class="no-print" style="margin-bottom: 20px;">
+            <button class="print-button" onclick="window.print()">
+                <i class="bi bi-printer"></i> Print / Save as PDF
+            </button>
+            <button class="close-button" onclick="window.close()">
+                <i class="bi bi-x-circle"></i> Close
+            </button>
+        </div>
+
+        <!-- Header -->
+        <div class="project-header">
+            <h1>NIGERIAN PORTS AUTHORITY</h1>
+            <h2>ENGINEERING DIVISION</h2>
+            <h3>BILL OF ENGINEERING MEASUREMENT & EVALUATION (BEME)</h3>
+        </div>
+
+        <!-- Project Info -->
+        <table class="info-table">
+            <tr>
+                <td>BEME No:</td>
+                <td>{{ beme_number }}</td>
+                <td>Date:</td>
+                <td>{{ generated_date|date:"d/m/Y" }}</td>
+            </tr>
+            <tr>
+                <td>Project ID:</td>
+                <td>{{ project.project_id }}</td>
+                <td>Project Type:</td>
+                <td>{{ project.get_project_type_display }}</td>
+            </tr>
+            <tr>
+                <td>Project Title:</td>
+                <td colspan="3"><strong>{{ project.title }}</strong></td>
+            </tr>
+            <tr>
+                <td>Location:</td>
+                <td colspan="3">{{ project.location }}</td>
+            </tr>
+            <tr>
+                <td>Prepared By:</td>
+                <td>{{ prepared_by.get_full_name|default:prepared_by.username }}</td>
+                <td>Forwarded To:</td>
+                {% comment %} <td>{{ forwarded_to.get_full_name|default:forwarded_to.username|default:"—" }}</td> {% endcomment %}
+            </tr>
+        </table>
+
+        <!-- BEME Items -->
+        {% for section_name, items in sections.items %}
+        <div style="margin-top: 20px;">
+            <div class="section-header">{{ section_name }}</div>
+            
+            <table>
+                <thead>
+                    <tr>
+                        <th width="8%">S/N</th>
+                        <th width="37%">DESCRIPTION</th>
+                        <th width="10%">QTY</th>
+                        <th width="10%">UNIT</th>
+                        <th width="15%">RATE (₦)</th>
+                        <th width="20%">AMOUNT (₦)</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in items %}
+                    <tr>
+                        <td style="text-align: center;">{{ item.item_number }}</td>
+                        <td>{{ item.description }}</td>
+                        <td style="text-align: right;">{{ item.quantity|floatformat:2 }}</td>
+                        <td style="text-align: center;">{{ item.get_unit_display }}</td>
+                        <td class="amount">{{ item.rate|floatformat:2 }}</td>
+                        <td class="amount">{{ item.amount|floatformat:2 }}</td>
+                    </tr>
+                    {% endfor %}
+                    <tr class="section-total">
+                        <td colspan="5" style="text-align: right; font-weight: bold;">SECTION TOTAL:</td>
+                        <td class="amount" style="font-weight: bold;">{{ section_totals|get_item:section_name|floatformat:2 }}</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+        {% empty %}
+        <p style="text-align: center; padding: 40px; color: #666; border: 1px solid #ccc;">
+            No items have been added to this BEME.
+        </p>
+        {% endfor %}
+
+        <!-- Financial Summary -->
+        <div style="float: right; width: 50%; margin-top: 25px;">
+            <table style="border: 1px solid #ccc;">
+                <tr>
+                    <td style="font-weight: bold; width: 60%;">SUB-TOTAL:</td>
+                    <td class="amount" style="width: 40%;">₦ {{ subtotal|floatformat:2 }}</td>
+                </tr>
+                <tr>
+                    <td style="font-weight: bold;">CONTINGENCY (5%):</td>
+                    <td class="amount">₦ {{ contingency|floatformat:2 }}</td>
+                </tr>
+                <tr>
+                    <td style="font-weight: bold;">VAT (7.5%):</td>
+                    <td class="amount">₦ {{ vat|floatformat:2 }}</td>
+                </tr>
+                <tr class="grand-total">
+                    <td style="font-weight: bold;">GRAND TOTAL:</td>
+                    <td class="amount" style="font-weight: bold;">₦ {{ grand_total|floatformat:2 }}</td>
+                </tr>
+            </table>
+        </div>
+
+        <!-- Amount in Words -->
+        <div class="amount-words">
+            <p style="margin: 0;">
+                <strong>Amount in Words:</strong> {{ grand_total_words }}
+            </p>
+        </div>
+
+        <!-- Footer -->
+        <div class="footer">
+            <p style="margin: 0;">
+                Generated on: {{ generated_date|date:"d/m/Y H:i" }} | 
+                Document Ref: {{ beme_number }}
+            </p>
+        </div>
+    </div>
+
+    <script>
+        // Auto-adjust layout for printing
+        window.onload = function() {
+            // Ensure all content fits on one page
+            console.log('BEME PDF loaded');
+        };
+    </script>
+</body>
+</html>

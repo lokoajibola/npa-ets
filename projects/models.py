@@ -27,6 +27,7 @@ class Contractor(models.Model):
     def __str__(self):
         return f"{self.name} ({self.registration_number})"
 
+
 # Project Model - MUST EXIST AND BE DEFINED FIRST
 class Project(models.Model):
     STATUS_CHOICES = [
@@ -91,6 +92,18 @@ class Project(models.Model):
     
     # Contractor
     contractor = models.ForeignKey(Contractor, on_delete=models.SET_NULL, null=True, blank=True)
+    contractor_address = models.CharField(max_length=100, blank=True)
+    contractor_phone = models.CharField(max_length=20, blank=True)
+    # Contract fields
+    contract_sum = models.DecimalField(max_digits=15, decimal_places=2, null=True, blank=True, help_text="Total contract sum")
+    contingencies = models.DecimalField(max_digits=15, decimal_places=2, null=True, blank=True, default=0)
+    contract_award_date = models.DateField(null=True, blank=True)
+    contract_award_ref = models.CharField(max_length=100, blank=True)
+    contract_duration = models.IntegerField(null=True, blank=True, help_text="Duration in days")
+    performance_bond = models.DecimalField(max_digits=15, decimal_places=2, null=True, blank=True)
+    advance_payment = models.DecimalField(max_digits=15, decimal_places=2, null=True, blank=True)
+    retention_percentage = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True, default=5.00)
+    contract_completion_date = models.DateField(null=True, blank=True)
     
     # Timestamps
     created_at = models.DateTimeField(auto_now_add=True)
@@ -180,6 +193,13 @@ class ProjectStage(models.Model):
     # Personnel
     assigned_to = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, 
                                    related_name='assigned_stages')
+    forward_to = models.ForeignKey(
+        User, 
+        on_delete=models.SET_NULL, 
+        null=True, 
+        blank=True,
+        related_name='forwarded_stages'
+    )
     
     # Stage-specific fields
     contractor = models.ForeignKey(Contractor, on_delete=models.SET_NULL, null=True, blank=True)
@@ -267,7 +287,77 @@ class ProjectDocument(models.Model):
     
     def __str__(self):
         return f"{self.title} - {self.project.project_id}"
+
+
+# projects/models.py
+class PaymentCertificate(models.Model):
+    certificate_id = models.UUIDField(default=uuid.uuid4, editable=False, unique=True)
+    project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name='payment_certificates')
+    stage = models.ForeignKey(ProjectStage, on_delete=models.CASCADE, related_name='payment_certificates')
     
+    # Certificate info
+    certificate_no = models.CharField(max_length=50)
+    certificate_date = models.DateField()
+    
+    # Input fields (matching your Excel layout)
+    contingencies = models.DecimalField(max_digits=15, decimal_places=2, default=0)
+    estimated_omission = models.DecimalField(max_digits=15, decimal_places=2, default=0)
+    estimated_addition = models.DecimalField(max_digits=15, decimal_places=2, default=0)
+    work_completed_to_date = models.DecimalField(max_digits=15, decimal_places=2)
+    cost_of_escalation = models.DecimalField(max_digits=15, decimal_places=2, default=0)
+    materials_on_site = models.DecimalField(max_digits=15, decimal_places=2, default=0)
+    retention_rate = models.DecimalField(max_digits=5, decimal_places=2, default=5.00)
+    fluctuation_claims = models.DecimalField(max_digits=15, decimal_places=2, default=0)
+    refund_advance_payment = models.DecimalField(max_digits=15, decimal_places=2, default=0)
+    amount_previously_certified = models.DecimalField(max_digits=15, decimal_places=2, default=0)
+    
+    # Calculated fields (can be properties instead of stored fields)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        ordering = ['-certificate_date']
+    
+    def __str__(self):
+        return f"{self.certificate_no} - {self.project.project_id}"
+    
+    @property
+    def contract_sum(self):
+        return self.project.contract_sum or 0
+    
+    @property
+    def estimated_total_cost(self):
+        """ESTIMATED TOTAL COST OF WORKS"""
+        return (self.contract_sum - self.contingencies - 
+                self.estimated_omission + self.estimated_addition)
+    
+    @property
+    def total_value_works(self):
+        """TOTAL VALUE OF WORKS AND MATERIALS ON SITE (4)"""
+        return self.cost_of_escalation + self.materials_on_site
+    
+    @property
+    def retention_amount(self):
+        """RETENTION AMOUNT (5)"""
+        return self.work_completed_to_date * (self.retention_rate / 100)
+    
+    @property
+    def total_net_payment(self):
+        """TOTAL NET PAYMENT (7)"""
+        return (self.work_completed_to_date + self.total_value_works - 
+                self.retention_amount + self.fluctuation_claims)
+    
+    @property
+    def total_net_amount_payable(self):
+        """TOTAL NET AMOUNT PAYABLE (9)"""
+        return self.total_net_payment - self.refund_advance_payment
+    
+    @property
+    def amount_now_payable(self):
+        """AMOUNT NOW PAYABLE (11)"""
+        return self.total_net_amount_payable - self.amount_previously_certified
+    
+        
 # Technical Review Committee Model
 class TechnicalReview(models.Model):
     review_id = models.UUIDField(default=uuid.uuid4, editable=False, unique=True)
@@ -290,53 +380,6 @@ class TechnicalReview(models.Model):
     
     def __str__(self):
         return f"Tech Review - {self.project.project_id} - {self.review_date}"
-
-# stages/models.py
-from django.db import models
-from projects.models import Project
-from accounts.models import User
-import uuid
-
-class BOQBEME(models.Model):
-    STATUS_CHOICES = [
-        ('draft', 'Draft'),
-        ('pending', 'Pending Approval'),
-        ('approved', 'Approved'),
-        ('rejected', 'Rejected'),
-    ]
-    
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name='bemes')
-    stage = models.ForeignKey('ProjectStage', on_delete=models.CASCADE, related_name='bemes')
-    
-    # BEME specific fields
-    beme_number = models.CharField(max_length=50, unique=True)
-    prepared_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name='prepared_bemes')
-    forward_to = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name='forwarded_bemes')
-    
-    # BOQ/BEME data will be stored as JSON
-    beme_data = models.JSONField(default=dict)
-    section_order = models.JSONField(default=list)
-    
-    # Financial summary
-    subtotal = models.DecimalField(max_digits=15, decimal_places=2, default=0)
-    contingency = models.DecimalField(max_digits=15, decimal_places=2, default=0)
-    vat = models.DecimalField(max_digits=15, decimal_places=2, default=0)
-    grand_total = models.DecimalField(max_digits=15, decimal_places=2, default=0)
-    
-    # Metadata
-    document = models.FileField(upload_to='bemes/', null=True, blank=True)
-    notes = models.TextField(blank=True)
-    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='draft')
-    
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-    
-    class Meta:
-        ordering = ['-created_at']
-    
-    def __str__(self):
-        return f"{self.beme_number} - {self.project.project_id}"
 
 # projects/models.py - Update BOQItem model
 class BOQItem(models.Model):

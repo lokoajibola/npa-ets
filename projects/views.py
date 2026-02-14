@@ -5,8 +5,8 @@ from django.views.generic import ListView, DetailView, CreateView, UpdateView
 from django.urls import reverse_lazy
 from django.contrib import messages
 from django.db.models import Q
-from .models import Project, ProjectStage, ProjectDocument, ProgressReport, Contractor
-from .forms import ProjectForm, ProjectStageForm, ProjectDocumentForm, ProgressReportForm, BOQBEMEForm, SiteInspectionForm, ProjectProposalForm, ContractAwardForm, DueDiligenceForm, ProjectCertificationForm, NominationSupervisorForm
+from .models import Project, ProjectStage, ProjectDocument, ProgressReport, Contractor, BOQItem
+from .forms import ProjectForm, ProjectStageForm, ProjectDocumentForm, ProgressReportForm, SiteInspectionForm, ProjectProposalForm, ContractAwardForm, DueDiligenceForm, PaymentCertificateForm, NominationSupervisorForm
 from django.utils import timezone
 
 # Project List View
@@ -193,7 +193,7 @@ def update_stage(request, project_id, stage_id):
             request.user == project.created_by or 
             request.user.office in ['executive_director', 'general_manager']):
         messages.error(request, "You don't have permission to update this stage.")
-        return redirect('project_detail', pk=project_id)
+        return redirect('project_detail', project_id=project_id)  # Changed from pk= to project_id=
     
     if request.method == 'POST':
         form = ProjectStageForm(request.POST, request.FILES, instance=stage)
@@ -206,7 +206,7 @@ def update_stage(request, project_id, stage_id):
                 stage.save()
             
             messages.success(request, f'{stage.get_stage_type_display()} stage updated!')
-            return redirect('project_detail', pk=project_id)
+            return redirect('project_detail', project_id=project_id)  # Changed from pk= to project_id=
     else:
         form = ProjectStageForm(instance=stage)
     
@@ -352,11 +352,66 @@ def project_proposal_view(request, project_id, stage_id):
                               'project_proposal', ProjectProposalForm,
                               'stages/project_proposal.html')
 
-@login_required  
+@login_required
 def contract_award_view(request, project_id, stage_id):
-    return stage_specific_view(request, project_id, stage_id,
-                              'contract_award', ContractAwardForm,
-                              'stages/contract_award.html')
+    project = get_object_or_404(Project, project_id=project_id)
+    stage = get_object_or_404(ProjectStage, stage_id=stage_id, project=project)
+    
+    if stage.stage_type != 'contract_award':
+        messages.error(request, "This is not a contract award stage")
+        return redirect('project_detail', project_id=project_id)
+    
+    if request.method == 'POST':
+        form = ContractAwardForm(request.POST, request.FILES, instance=stage)
+        
+        if form.is_valid():
+            # Save the stage
+            stage = form.save()
+            
+            # Get the selected contractor
+            contractor = form.cleaned_data.get('contractor')
+            if contractor:
+                project.contractor = contractor
+                stage.contractor = contractor
+            
+            # Update project with contract information
+            project.contract_sum = form.cleaned_data.get('contract_amount')
+            project.contract_award_date = form.cleaned_data.get('contract_date')
+            project.contract_award_ref = form.cleaned_data.get('contract_reference')
+            project.contract_duration = form.cleaned_data.get('contract_duration')
+            project.performance_bond = form.cleaned_data.get('performance_bond', 0)
+            project.advance_payment = form.cleaned_data.get('advance_payment', 0)
+            project.retention_percentage = form.cleaned_data.get('retention_percentage', 5.00)
+            
+            # Calculate completion date
+            if stage.start_date and form.cleaned_data.get('contract_duration'):
+                from datetime import timedelta
+                project.contract_completion_date = stage.start_date + timedelta(
+                    days=form.cleaned_data.get('contract_duration')
+                )
+            
+            project.save()
+            stage.save()
+            
+            # If stage is completed, update dates
+            if stage.status == 'completed' and not stage.end_date:
+                stage.end_date = timezone.now().date()
+                stage.save()
+            
+            messages.success(request, 'Contract awarded successfully!')
+            return redirect('project_detail', project_id=project_id)
+        else:
+            messages.error(request, 'Please correct the errors below.')
+    else:
+        form = ContractAwardForm(instance=stage)
+    
+    context = {
+        'form': form,
+        'project': project,
+        'stage': stage,
+        'page_title': 'Contract Award',
+    }
+    return render(request, 'stages/contract_award.html', context)
 
 # Stage-specific view functions
 from django.http import HttpResponse, FileResponse
@@ -364,8 +419,8 @@ import json
 import os
 from .pdf_utils import generate_boq_pdf
 
-from .forms import BOQBEMEForm, BOQItemFormSet
-
+from .forms import BOQItemFormSet
+from decimal import Decimal
 import json
 from django.core.serializers.json import DjangoJSONEncoder
 
@@ -378,96 +433,184 @@ def boq_beme_view(request, project_id, stage_id):
         messages.error(request, "This is not a BOQ/BEME preparation stage")
         return redirect('project_detail', project_id=project_id)
     
-    from projects.models import BOQBEME
+    # Get all active users for forwarding
     from accounts.models import User
+    import json
+    from django.core.serializers.json import DjangoJSONEncoder
+    from decimal import Decimal
+    from django.utils import timezone
     
-    # Get or create BEME record for this stage
-    beme, created = BOQBEME.objects.get_or_create(
-        stage=stage,
-        project=project,
-        defaults={
-            'prepared_by': request.user,
-            'beme_number': f"BEME/{project.project_id}/{timezone.now().year}/{BOQBEME.objects.filter(project=project).count() + 1:03d}"
-        }
-    )
-    
-    # Get staff list
-    staff_list = User.objects.filter(is_active=True).exclude(id=request.user.id).order_by('-grade_level', 'last_name')
-    
-    formatted_staff = []
-    for staff in staff_list:
-        full_name = f"{staff.first_name} {staff.last_name}".strip() or staff.username
-        formatted_staff.append({
-            'id': staff.id,
-            'name': full_name,
-            'email': staff.email or '',
-            'office': staff.get_office_display() if staff.office else '',
-            'department': staff.get_department_display() if staff.department else '',
-            'grade_level': staff.grade_level,
-            'employee_id': staff.employee_id or '',
-            'is_approving_officer': staff.is_approving_officer,
-        })
+    # Get existing BOQ items for this stage
+    existing_items = stage.boq_items.all().order_by('order', 'item_number')
     
     if request.method == 'POST':
-        form = BOQBEMEForm(request.POST, request.FILES, instance=beme)
+        # Handle the form submission
+        stage.notes = request.POST.get('notes', stage.notes)
         
-        if form.is_valid():
-            # Save the form data
-            beme = form.save(commit=False)
+        # Handle document upload
+        if 'document' in request.FILES:
+            stage.document = request.FILES['document']
+            stage.is_document_uploaded = True
+        
+        stage.save()
+        
+        # Get BEME data from the hidden field
+        beme_data = request.POST.get('beme_data', '[]')
+        
+        try:
+            beme_items = json.loads(beme_data)
             
-            # Get the BEME data from the hidden field
-            beme_data = request.POST.get('beme_data', '{}')
-            section_order = request.POST.get('section_order', '[]')
+            # Delete existing BOQ items for this stage
+            stage.boq_items.all().delete()
             
-            try:
-                beme.beme_data = json.loads(beme_data)
-                beme.section_order = json.loads(section_order)
-            except json.JSONDecodeError:
-                beme.beme_data = {}
-                beme.section_order = []
-            
-            # Get forward_to from the hidden input
-            forward_to_id = request.POST.get('forward_to')
-            if forward_to_id:
-                try:
-                    beme.forward_to = User.objects.get(id=forward_to_id)
-                except User.DoesNotExist:
-                    pass
-            
-            # Calculate totals from the JavaScript data
-            beme.subtotal = request.POST.get('subtotal', 0)
-            beme.contingency = request.POST.get('contingency', 0)
-            beme.vat = request.POST.get('vat', 0)
-            beme.grand_total = request.POST.get('grand_total', 0)
-            
-            beme.save()
+            # Create new BOQ items
+            order = 0
+            for item_data in beme_items:
+                # Convert string values to Decimal
+                quantity = Decimal(str(item_data.get('quantity', '0'))) if item_data.get('quantity') else Decimal('0')
+                rate = Decimal(str(item_data.get('rate', '0'))) if item_data.get('rate') else Decimal('0')
+                amount = quantity * rate
+                
+                BOQItem.objects.create(
+                    project_stage=stage,
+                    section=item_data.get('section', 'Main Section'),
+                    item_number=item_data.get('sn', str(order + 1)),
+                    description=item_data.get('description', ''),
+                    quantity=quantity,
+                    unit=item_data.get('unit', 'item'),
+                    rate=rate,
+                    amount=amount,
+                    order=order
+                )
+                order += 1
             
             messages.success(request, 'BEME saved successfully!')
             
+            # Check if this is a PDF generation request
             if 'generate_pdf' in request.POST:
-                return redirect(f'{request.path}?action=generate_pdf')
+                return redirect('beme_pdf', project_id=project.project_id, stage_id=stage.stage_id)
             
             return redirect('project_detail', project_id=project_id)
-        else:
-            messages.error(request, 'Please correct the errors below.')
-    else:
-        form = BOQBEMEForm(instance=beme)
+                
+        except json.JSONDecodeError as e:
+            messages.error(request, f'Error processing BEME data: {e}')
+        except Exception as e:
+            messages.error(request, f'Error saving BEME: {str(e)}')
+        
+        return redirect('project_detail', project_id=project_id)
     
-    # Calculate next sequence number
-    beme_count = BOQBEME.objects.filter(project=project).count()
-    beme_sequence = beme_count + 1
+    # Generate BEME sequence number
+    beme_count = stage.boq_items.count()
+    beme_sequence = f"{beme_count + 1:03d}"
+    
+    # Prepare initial data for the template
+    initial_items = []
+    sections = set()
+    
+    for item in existing_items:
+        sections.add(item.section)
+        initial_items.append({
+            'sn': item.item_number,
+            'section': item.section,
+            'description': item.description,
+            'quantity': str(item.quantity),
+            'unit': item.unit,
+            'rate': str(item.rate),
+            'amount': str(item.amount)
+        })
     
     context = {
-        'form': form,
+        'form': None,
         'project': project,
         'stage': stage,
-        'beme': beme,
         'page_title': 'BEME Preparation',
-        'staff_list': json.dumps(formatted_staff, cls=DjangoJSONEncoder),
-        'beme_sequence': f"{beme_sequence:03d}",
-        'initial_beme_data': json.dumps(beme.beme_data if beme.beme_data else {}),
+        'beme_sequence': beme_sequence,
+        'initial_items': json.dumps(initial_items),
+        'existing_sections': json.dumps(list(sections)),
     }
     return render(request, 'stages/boq_beme_simple.html', context)
+
+# projects/views.py
+from django.http import HttpResponse
+from django.template.loader import render_to_string
+from django.utils import timezone
+from decimal import Decimal
+import json
+
+@login_required
+def generate_beme_pdf(request, project_id, stage_id):
+    project = get_object_or_404(Project, project_id=project_id)
+    stage = get_object_or_404(ProjectStage, stage_id=stage_id, project=project)
+    
+    # Get BOQ items
+    boq_items = stage.boq_items.all().order_by('order', 'item_number')
+    
+    # Group items by section and calculate section totals
+    sections = {}
+    section_totals = {}
+    
+    for item in boq_items:
+        if item.section not in sections:
+            sections[item.section] = []
+            section_totals[item.section] = Decimal('0')
+        sections[item.section].append(item)
+        section_totals[item.section] += item.amount
+    
+    # Calculate overall totals
+    subtotal = sum(item.amount for item in boq_items)
+    contingency = subtotal * Decimal('0.05')
+    vat = subtotal * Decimal('0.075')
+    grand_total = subtotal + contingency + vat
+    
+    # Convert number to words
+    def number_to_words(num):
+        num = int(round(num))
+        ones = ['', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine',
+                'Ten', 'Eleven', 'Twelve', 'Thirteen', 'Fourteen', 'Fifteen', 'Sixteen', 
+                'Seventeen', 'Eighteen', 'Nineteen']
+        tens = ['', '', 'Twenty', 'Thirty', 'Forty', 'Fifty', 'Sixty', 'Seventy', 'Eighty', 'Ninety']
+        
+        if num == 0:
+            return 'Zero Naira Only'
+        
+        def convert_less_than_thousand(n):
+            if n == 0:
+                return ''
+            elif n < 20:
+                return ones[n]
+            elif n < 100:
+                return tens[n // 10] + (' ' + ones[n % 10] if n % 10 != 0 else '')
+            else:
+                return ones[n // 100] + ' Hundred ' + convert_less_than_thousand(n % 100)
+        
+        result = ''
+        if num >= 1000000:
+            result += convert_less_than_thousand(num // 1000000) + ' Million '
+            num %= 1000000
+        if num >= 1000:
+            result += convert_less_than_thousand(num // 1000) + ' Thousand '
+            num %= 1000
+        if num > 0:
+            result += convert_less_than_thousand(num)
+        
+        return result.strip() + ' Naira Only'
+    
+    context = {
+        'project': project,
+        'stage': stage,
+        'sections': sections,
+        'section_totals': section_totals,
+        'subtotal': subtotal,
+        'contingency': contingency,
+        'vat': vat,
+        'grand_total': grand_total,
+        'grand_total_words': number_to_words(grand_total),
+        'prepared_by': request.user,
+        'beme_number': f"BEME/{project.project_id}/{timezone.now().year}/{boq_items.count() + 1:03d}",
+        'generated_date': timezone.now(),
+    }
+    
+    return render(request, 'stages/beme_pdf_print.html', context)
 
 @login_required
 def due_diligence_view(request, project_id, stage_id):
@@ -475,11 +618,63 @@ def due_diligence_view(request, project_id, stage_id):
                               'due_diligence', DueDiligenceForm,
                               'stages/due_diligence.html')
 
+# projects/views.py
 @login_required
 def project_certification_view(request, project_id, stage_id):
-    return stage_specific_view(request, project_id, stage_id,
-                              'payment_certificate', ProjectCertificationForm,
-                              'stages/project_certification.html')
+    project = get_object_or_404(Project, project_id=project_id)
+    stage = get_object_or_404(ProjectStage, stage_id=stage_id, project=project)
+    
+    if stage.stage_type != 'payment_certificate':
+        messages.error(request, "This is not a payment certification stage")
+        return redirect('project_detail', project_id=project_id)
+    
+    # Get or create payment certificate for this stage
+    from .models import PaymentCertificate
+    certificate, created = PaymentCertificate.objects.get_or_create(
+        stage=stage,
+        project=project,
+        defaults={
+            'certificate_no': f"CERT/{project.project_id}/{timezone.now().year}/001",
+            'certificate_date': timezone.now().date(),
+            'work_completed_to_date': project.contract_sum or 0,
+        }
+    )
+    
+    if request.method == 'POST':
+        form = PaymentCertificateForm(request.POST, instance=certificate)
+        
+        # Handle stage completion
+        stage.status = request.POST.get('stage_status', stage.status)
+        stage.notes = request.POST.get('notes', stage.notes)
+        
+        if 'document' in request.FILES:
+            stage.document = request.FILES['document']
+            stage.is_document_uploaded = True
+        
+        stage.save()
+        
+        if form.is_valid():
+            form.save()
+            messages.success(request, 'Payment certificate saved successfully!')
+            
+            if 'generate_pdf' in request.POST:
+                return redirect('certificate_pdf', project_id=project.project_id, 
+                              certificate_id=certificate.certificate_id)
+            
+            return redirect('project_detail', project_id=project_id)
+        else:
+            messages.error(request, 'Please correct the errors below.')
+    else:
+        form = PaymentCertificateForm(instance=certificate)
+    
+    context = {
+        'form': form,
+        'project': project,
+        'stage': stage,
+        'certificate': certificate,
+        'page_title': 'Payment Certificate',
+    }
+    return render(request, 'stages/payment_certificate.html', context)
 
 @login_required  
 def contract_award_view(request, project_id, stage_id):

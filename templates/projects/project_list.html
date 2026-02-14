@@ -101,7 +101,7 @@
                             <strong>{{ project.project_id }}</strong>
                         </td>
                         <td>
-                            <a href="{% url 'project_detail' project_id=project.project_id|urlencode %}">
+                            <a href="{% url 'project_detail' project_id=project.project_id|urlencode %}"
                                class="text-decoration-none">
                                 {{ project.title|truncatechars:40 }}
                             </a>

@@ -1,0 +1,445 @@
+{% extends 'base.html' %}
+{% load crispy_forms_tags %}
+{% load static %}
+
+{% block page_title %}Payment Certificate{% endblock %}
+
+{% block extra_css %}
+<style>
+    .certificate-table {
+        font-size: 0.9rem;
+        width: 100%;
+        border-collapse: collapse;
+    }
+    .certificate-table th {
+        background-color: #003087;
+        color: white;
+        font-weight: 600;
+        padding: 10px;
+        text-align: left;
+    }
+    .certificate-table td {
+        padding: 8px;
+        border: 1px solid #dee2e6;
+    }
+    .certificate-table .label-cell {
+        font-weight: 600;
+        background-color: #f8f9fa;
+        width: 40%;
+    }
+    .certificate-table .value-cell {
+        width: 30%;
+    }
+    .certificate-table .amount-cell {
+        text-align: right;
+        font-family: 'Courier New', monospace;
+        font-weight: 500;
+    }
+    .section-header {
+        background-color: #e9ecef;
+        font-weight: 700;
+        font-size: 1rem;
+    }
+    .total-row {
+        background-color: #d4edda;
+        font-weight: 700;
+    }
+    .grand-total {
+        background-color: #c3e6cb;
+        font-weight: 800;
+        font-size: 1.1rem;
+    }
+    .currency {
+        font-family: 'Courier New', monospace;
+    }
+    .readonly-field {
+        background-color: #f8f9fa;
+        border: 1px solid #dee2e6;
+        padding: 6px 12px;
+        border-radius: 4px;
+        display: block;
+        width: 100%;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="card mb-4">
+        <div class="card-header bg-warning text-dark">
+            <div class="text-center">
+                <h3 class="mb-1">PAYMENT CERTIFICATE</h3>
+                <h5 class="mb-0">{{ project.title }}</h5>
+                <small>Project ID: {{ project.project_id }}</small>
+            </div>
+        </div>
+        <div class="card-body">
+            <form method="post" enctype="multipart/form-data" id="certificate-form">
+                {% csrf_token %}
+                
+                <!-- Header Information -->
+                <div class="row mb-4">
+                    <div class="col-md-6">
+                        <div class="form-group">
+                            <label class="form-label">Payment Certificate No</label>
+                            {{ form.certificate_no|as_crispy_field }}
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="form-group">
+                            <label class="form-label">Date</label>
+                            {{ form.certificate_date|as_crispy_field }}
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Contract Information (Read-only from Project) -->
+                <div class="card mb-4">
+                    <div class="card-header bg-light">
+                        <h6 class="mb-0">Contract Information</h6>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <table class="table table-sm">
+                                    <tr>
+                                        <td><strong>Contract/Consultants:</strong></td>
+                                        <td>{{ project.contractor.name|default:"—" }}</td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Contact Address:</strong></td>
+                                        <td>{{ project.contractor.address|default:"—" }}</td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Contact No.:</strong></td>
+                                        <td>{{ project.contractor.phone|default:"—" }}</td>
+                                    </tr>
+                                </table>
+                            </div>
+                            <div class="col-md-6">
+                                <table class="table table-sm">
+                                    <tr>
+                                        <td><strong>Contract Award Date:</strong></td>
+                                        <td>{{ project.contract_award_date|date:"d/m/Y"|default:"—" }}</td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Contract Award Ref:</strong></td>
+                                        <td>{{ project.contract_award_ref|default:"—" }}</td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>CONTRACT SUM:</strong></td>
+                                        <td class="amount-cell">₦ {{ project.contract_sum|floatformat:2|default:"0.00" }}</td>
+                                    </tr>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Main Certificate Table -->
+                <div class="table-responsive">
+                    <table class="table table-bordered certificate-table">
+                        <thead>
+                            <tr>
+                                <th colspan="3">PAYMENT CERTIFICATE CALCULATION</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <!-- Contract Sum -->
+                            <tr>
+                                <td class="label-cell">CONTRACT SUM</td>
+                                <td class="value-cell"></td>
+                                <td class="amount-cell">₦ {{ project.contract_sum|floatformat:2|default:"0.00" }}</td>
+                            </tr>
+                            
+                            <!-- Contingencies -->
+                            <tr>
+                                <td class="label-cell">LESS CONTINGENCIES</td>
+                                <td class="value-cell">{{ form.contingencies }}</td>
+                                <td class="amount-cell" id="contingencies-display">₦ 0.00</td>
+                            </tr>
+                            
+                            <!-- SCHEDULE OF WORKS header -->
+                            <tr class="section-header">
+                                <td colspan="3">SCHEDULE OF WORKS</td>
+                            </tr>
+                            
+                            <!-- Estimated Omission -->
+                            <tr>
+                                <td class="label-cell">LESS ESTIMATED OMISSION</td>
+                                <td class="value-cell">{{ form.estimated_omission }}</td>
+                                <td class="amount-cell" id="omission-display">₦ 0.00</td>
+                            </tr>
+                            
+                            <!-- Estimated Addition -->
+                            <tr>
+                                <td class="label-cell">ADD ESTIMATED ADDITION</td>
+                                <td class="value-cell">{{ form.estimated_addition }}</td>
+                                <td class="amount-cell" id="addition-display">₦ 0.00</td>
+                            </tr>
+                            
+                            <!-- Estimated Total Cost -->
+                            <tr class="total-row">
+                                <td class="label-cell">ESTIMATED TOTAL COST OF WORKS</td>
+                                <td></td>
+                                <td class="amount-cell" id="estimated-total">₦ 0.00</td>
+                            </tr>
+                            
+                            <!-- Empty spacer row -->
+                            <tr><td colspan="3" style="height: 20px;"></td></tr>
+                            
+                            <!-- ITEM 1 -->
+                            <tr>
+                                <td class="label-cell">1. WORK COMPLETED TO DATE</td>
+                                <td class="value-cell">{{ form.work_completed_to_date }}</td>
+                                <td class="amount-cell" id="work-completed-display">₦ 0.00</td>
+                            </tr>
+                            
+                            <!-- ITEM 2 -->
+                            <tr>
+                                <td class="label-cell">2. ADD COST OF ESCALATION</td>
+                                <td class="value-cell">{{ form.cost_of_escalation }}</td>
+                                <td class="amount-cell" id="escalation-display">₦ 0.00</td>
+                            </tr>
+                            
+                            <!-- ITEM 3 -->
+                            <tr>
+                                <td class="label-cell">3. MATERIALS ON SITE</td>
+                                <td class="value-cell">{{ form.materials_on_site }}</td>
+                                <td class="amount-cell" id="materials-display">₦ 0.00</td>
+                            </tr>
+                            
+                            <!-- ITEM 4 -->
+                            <tr>
+                                <td class="label-cell">4. TOTAL VALUE OF WORKS AND MATERIALS ON SITE</td>
+                                <td></td>
+                                <td class="amount-cell" id="total-value">₦ 0.00</td>
+                            </tr>
+                            
+                            <!-- ITEM 5 -->
+                            <tr>
+                                <td class="label-cell">5. LESS RETENTION ({{ form.retention_rate }}%)</td>
+                                <td></td>
+                                <td class="amount-cell" id="retention-amount">₦ 0.00</td>
+                            </tr>
+                            
+                            <!-- ITEM 6 -->
+                            <tr>
+                                <td class="label-cell">6. FLUCTUATION AND OTHER CLAIMS</td>
+                                <td class="value-cell">{{ form.fluctuation_claims }}</td>
+                                <td class="amount-cell" id="fluctuation-display">₦ 0.00</td>
+                            </tr>
+                            
+                            <!-- ITEM 7 -->
+                            <tr class="total-row">
+                                <td class="label-cell">7. TOTAL NET PAYMENT IN RESPECT OF WORKS</td>
+                                <td></td>
+                                <td class="amount-cell" id="total-net-payment">₦ 0.00</td>
+                            </tr>
+                            
+                            <!-- ITEM 8 -->
+                            <tr>
+                                <td class="label-cell">8. LESS REFUND OF ADVANCE PAYMENT</td>
+                                <td class="value-cell">{{ form.refund_advance_payment }}</td>
+                                <td class="amount-cell" id="refund-display">₦ 0.00</td>
+                            </tr>
+                            
+                            <!-- ITEM 9 -->
+                            <tr class="total-row">
+                                <td class="label-cell">9. TOTAL NET AMOUNT PAYABLE TO DATE</td>
+                                <td></td>
+                                <td class="amount-cell" id="net-amount-payable">₦ 0.00</td>
+                            </tr>
+                            
+                            <!-- ITEM 10 -->
+                            <tr>
+                                <td class="label-cell">10. LESS AMOUNT PREVIOUSLY CERTIFIED</td>
+                                <td class="value-cell">{{ form.amount_previously_certified }}</td>
+                                <td class="amount-cell" id="previously-certified-display">₦ 0.00</td>
+                            </tr>
+                            
+                            <!-- ITEM 11 -->
+                            <tr class="grand-total">
+                                <td class="label-cell">11. AMOUNT NOW PAYABLE</td>
+                                <td></td>
+                                <td class="amount-cell" id="amount-now-payable">₦ 0.00</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+                
+                <!-- Document Upload -->
+                <div class="row mt-4">
+                    <div class="col-md-6">
+                        <div class="form-group">
+                            <label class="form-label">Certificate Document (PDF)</label>
+                            <input type="file" name="document" class="form-control" accept=".pdf">
+                            {% if stage.document %}
+                            <small class="text-muted">Current file: {{ stage.document.name }}</small>
+                            {% endif %}
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="form-group">
+                            <label class="form-label">Stage Status</label>
+                            <select name="stage_status" class="form-control">
+                                <option value="pending" {% if stage.status == 'pending' %}selected{% endif %}>Pending</option>
+                                <option value="in_progress" {% if stage.status == 'in_progress' %}selected{% endif %}>In Progress</option>
+                                <option value="completed" {% if stage.status == 'completed' %}selected{% endif %}>Completed</option>
+                                <option value="blocked" {% if stage.status == 'blocked' %}selected{% endif %}>Blocked</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="row mt-3">
+                    <div class="col-md-12">
+                        <div class="form-group">
+                            <label class="form-label">Notes</label>
+                            <textarea name="notes" class="form-control" rows="3">{{ stage.notes }}</textarea>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Action Buttons -->
+                <div class="mt-4">
+                    <button type="submit" class="btn btn-npa">
+                        <i class="bi bi-save me-2"></i>Save Certificate
+                    </button>
+                    <button type="button" class="btn btn-success ms-2" id="generate-pdf">
+                        <i class="bi bi-file-pdf me-2"></i>Generate PDF
+                    </button>
+                    <a href="{% url 'project_detail' project_id=project.project_id %}" 
+                       class="btn btn-outline-secondary ms-2">
+                        Cancel
+                    </a>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Get DOM elements
+        const contractSum = parseFloat('{{ project.contract_sum|default:"0" }}') || 0;
+        
+        const contingencies = document.getElementById('id_contingencies');
+        const omission = document.getElementById('id_estimated_omission');
+        const addition = document.getElementById('id_estimated_addition');
+        const workCompleted = document.getElementById('id_work_completed_to_date');
+        const escalation = document.getElementById('id_cost_of_escalation');
+        const materials = document.getElementById('id_materials_on_site');
+        const retentionRate = document.getElementById('id_retention_rate');
+        const fluctuation = document.getElementById('id_fluctuation_claims');
+        const refund = document.getElementById('id_refund_advance_payment');
+        const previouslyCertified = document.getElementById('id_amount_previously_certified');
+        
+        // Display elements
+        const contingenciesDisplay = document.getElementById('contingencies-display');
+        const omissionDisplay = document.getElementById('omission-display');
+        const additionDisplay = document.getElementById('addition-display');
+        const estimatedTotal = document.getElementById('estimated-total');
+        const workCompletedDisplay = document.getElementById('work-completed-display');
+        const escalationDisplay = document.getElementById('escalation-display');
+        const materialsDisplay = document.getElementById('materials-display');
+        const totalValue = document.getElementById('total-value');
+        const retentionAmount = document.getElementById('retention-amount');
+        const fluctuationDisplay = document.getElementById('fluctuation-display');
+        const totalNetPayment = document.getElementById('total-net-payment');
+        const refundDisplay = document.getElementById('refund-display');
+        const netAmountPayable = document.getElementById('net-amount-payable');
+        const previouslyCertifiedDisplay = document.getElementById('previously-certified-display');
+        const amountNowPayable = document.getElementById('amount-now-payable');
+        
+        function formatCurrency(amount) {
+            return '₦' + parseFloat(amount).toLocaleString('en-NG', {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2
+            });
+        }
+        
+        function updateCalculations() {
+            // Get current values
+            const cont = parseFloat(contingencies.value) || 0;
+            const omiss = parseFloat(omission.value) || 0;
+            const add = parseFloat(addition.value) || 0;
+            const workComp = parseFloat(workCompleted.value) || contractSum;
+            const esc = parseFloat(escalation.value) || 0;
+            const mat = parseFloat(materials.value) || 0;
+            const retRate = parseFloat(retentionRate.value) || 5;
+            const fluct = parseFloat(fluctuation.value) || 0;
+            const ref = parseFloat(refund.value) || 0;
+            const prevCert = parseFloat(previouslyCertified.value) || 0;
+            
+            // Update displays
+            contingenciesDisplay.textContent = formatCurrency(cont);
+            omissionDisplay.textContent = formatCurrency(omiss);
+            additionDisplay.textContent = formatCurrency(add);
+            workCompletedDisplay.textContent = formatCurrency(workComp);
+            escalationDisplay.textContent = formatCurrency(esc);
+            materialsDisplay.textContent = formatCurrency(mat);
+            fluctuationDisplay.textContent = formatCurrency(fluct);
+            refundDisplay.textContent = formatCurrency(ref);
+            previouslyCertifiedDisplay.textContent = formatCurrency(prevCert);
+            
+            // Calculate ESTIMATED TOTAL COST OF WORKS
+            const estimatedTotalCost = contractSum - cont - omiss + add;
+            estimatedTotal.textContent = formatCurrency(estimatedTotalCost);
+            
+            // Calculate TOTAL VALUE OF WORKS AND MATERIALS (4)
+            const totalValueWorks = esc + mat;
+            totalValue.textContent = formatCurrency(totalValueWorks);
+            
+            // Calculate RETENTION (5)
+            const retention = workComp * (retRate / 100);
+            retentionAmount.textContent = formatCurrency(retention);
+            
+            // Calculate TOTAL NET PAYMENT (7)
+            const totalNet = workComp + totalValueWorks - retention + fluct;
+            totalNetPayment.textContent = formatCurrency(totalNet);
+            
+            // Calculate TOTAL NET AMOUNT PAYABLE (9)
+            const netPayable = totalNet - ref;
+            netAmountPayable.textContent = formatCurrency(netPayable);
+            
+            // Calculate AMOUNT NOW PAYABLE (11)
+            const nowPayable = netPayable - prevCert;
+            amountNowPayable.textContent = formatCurrency(nowPayable);
+        }
+        
+        // Add event listeners
+        [contingencies, omission, addition, workCompleted, escalation, 
+         materials, retentionRate, fluctuation, refund, previouslyCertified].forEach(field => {
+            if (field) {
+                field.addEventListener('input', updateCalculations);
+            }
+        });
+        
+        // Initial calculation
+        updateCalculations();
+        
+        // PDF Generation
+        document.getElementById('generate-pdf').addEventListener('click', function(e) {
+            e.preventDefault();
+            
+            const btn = this;
+            const originalText = btn.innerHTML;
+            btn.innerHTML = '<i class="bi bi-hourglass me-2"></i>Generating PDF...';
+            btn.disabled = true;
+            
+            // Add PDF flag and submit
+            let pdfInput = document.querySelector('input[name="generate_pdf"]');
+            if (!pdfInput) {
+                pdfInput = document.createElement('input');
+                pdfInput.type = 'hidden';
+                pdfInput.name = 'generate_pdf';
+                document.getElementById('certificate-form').appendChild(pdfInput);
+            }
+            pdfInput.value = 'true';
+            
+            document.getElementById('certificate-form').submit();
+        });
+    });
+</script>
+{% endblock %}

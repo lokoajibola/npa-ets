@@ -26,6 +26,9 @@ urlpatterns = [
     # Replace or add these specific stage URLs
     path('<str:project_id>/stage/boq-beme/<uuid:stage_id>/', 
         views.boq_beme_view, name='boq_beme'),
+    path('<str:project_id>/stage/boq-beme/<uuid:stage_id>/pdf/', 
+     views.generate_beme_pdf, name='beme_pdf'),
+    
     path('<str:project_id>/stage/due-diligence/<uuid:stage_id>/', 
         views.due_diligence_view, name='due_diligence'),
     path('<str:project_id>/stage/project-certification/<uuid:stage_id>/', 
@@ -35,6 +38,8 @@ urlpatterns = [
     path('<str:project_id>/stage/nomination-supervisor/<uuid:stage_id>/', 
         views.nomination_supervisor_view, name='nomination_supervisor'),
 
+    # path('<str:project_id>/certificate/<uuid:certificate_id>/pdf/', 
+    #  views.certificate_pdf_view, name='certificate_pdf'),
     
     # Project Documents
     path('<str:project_id>/documents/', views.project_documents, name='project_documents'),

@@ -118,17 +118,93 @@ class ProjectProposalForm(forms.ModelForm):
         model = ProjectStage
         fields = ['status', 'start_date', 'end_date', 'assigned_to', 'document', 'notes']
 
+# projects/forms.py
+from django import forms
+from .models import ProjectStage, Contractor
+
 class ContractAwardForm(forms.ModelForm):
-    contract_amount = forms.DecimalField(max_digits=15, decimal_places=2)
-    contract_duration = forms.IntegerField(help_text="Duration in days")
-    performance_bond = forms.DecimalField(max_digits=15, decimal_places=2, required=False)
+    # Keep contractor as ModelChoiceField but customize the display
+    contractor = forms.ModelChoiceField(
+        queryset=Contractor.objects.all(),
+        required=True,
+        label="Contractor",
+        widget=forms.Select(attrs={'class': 'form-control'})
+    )
+    
+    # Add a display field for "MESSRS" prefix
+    contractor_display = forms.CharField(
+        max_length=200,
+        required=False,
+        label="Contractor Name",
+        widget=forms.TextInput(attrs={
+            'class': 'form-control',
+            'readonly': 'readonly',
+            'style': 'background-color: #f8f9fa;'
+        })
+    )
+    
+    contract_amount = forms.DecimalField(
+        max_digits=15, 
+        decimal_places=2, 
+        label="Contract Amount (₦)",
+        widget=forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01'})
+    )
+    
+    contract_duration = forms.IntegerField(
+        help_text="Duration in days",
+        widget=forms.NumberInput(attrs={'class': 'form-control'})
+    )
+    
+    performance_bond = forms.DecimalField(
+        max_digits=15, 
+        decimal_places=2, 
+        required=False,
+        label="Performance Bond (₦)",
+        widget=forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01'})
+    )
+    
+    advance_payment = forms.DecimalField(
+        max_digits=15, 
+        decimal_places=2, 
+        required=False,
+        label="Advance Payment (₦)",
+        widget=forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01'})
+    )
+    
+    retention_percentage = forms.DecimalField(
+        max_digits=5, 
+        decimal_places=2, 
+        required=False,
+        label="Retention Percentage (%)",
+        initial=5.00,
+        widget=forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01'})
+    )
+    
+    completion_date = forms.DateField(
+        required=False,
+        label="Expected Completion Date",
+        widget=forms.DateInput(attrs={'type': 'date', 'class': 'form-control'})
+    )
     
     class Meta:
         model = ProjectStage
-        fields = ['status', 'start_date', 'end_date', 'contractor', 
-                 'contract_reference', 'contract_date', 'contract_amount',
+        fields = ['status', 'start_date', 'contract_date', 'contract_reference', 
                  'document', 'notes']
-        
+        widgets = {
+            'start_date': forms.DateInput(attrs={'type': 'date', 'class': 'form-control'}),
+            'contract_date': forms.DateInput(attrs={'type': 'date', 'class': 'form-control'}),
+            'contract_reference': forms.TextInput(attrs={'class': 'form-control'}),
+            'status': forms.Select(attrs={'class': 'form-control'}),
+            'notes': forms.Textarea(attrs={'rows': 3, 'class': 'form-control'}),
+            'document': forms.FileInput(attrs={'class': 'form-control'}),
+        }
+    
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Make contractor_display show MESSRS + contractor name
+        if self.instance and self.instance.contractor:
+            self.fields['contractor_display'].initial = f"MESSRS {self.instance.contractor.name}"
+            
 from django.forms import modelformset_factory, inlineformset_factory
 
 class BOQItemForm(forms.ModelForm):
@@ -154,22 +230,7 @@ BOQItemFormSet = inlineformset_factory(
     can_delete=True,
     can_order=False,
 )
-# stages/forms.py
-from django import forms
-from .models import BOQBEME, ProjectStage
-from accounts.models import User
 
-class BOQBEMEForm(forms.ModelForm):
-    class Meta:
-        model = BOQBEME
-        fields = ['document', 'notes', 'status']
-    
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.fields['document'].label = "BEME Document (PDF)"
-        self.fields['document'].required = False
-        self.fields['notes'].required = False
-        self.fields['status'].required = False
         
 class DueDiligenceForm(forms.ModelForm):
     due_diligence_date = forms.DateField(widget=forms.DateInput(attrs={'type': 'date'}))
@@ -190,20 +251,48 @@ class DueDiligenceForm(forms.ModelForm):
         super().__init__(*args, **kwargs)
         self.fields['document'].label = "Due Diligence Report"
 
-class ProjectCertificationForm(forms.ModelForm):
-    certificate_number = forms.CharField(max_length=50, label="Certificate Number")
-    certificate_date = forms.DateField(widget=forms.DateInput(attrs={'type': 'date'}))
-    amount_certified = forms.DecimalField(max_digits=15, decimal_places=2, label="Amount Certified (₦)")
-    work_certified = forms.CharField(widget=forms.Textarea(attrs={'rows': 3}), 
-                                    label="Work Certified")
-    certified_by = forms.ModelChoiceField(
-        queryset=User.objects.filter(office__in=['chief_port_engineer', 'general_manager', 'executive_director']),
-        label="Certified By"
-    )
-    
+# projects/forms.py
+from django import forms
+from .models import PaymentCertificate
+
+class PaymentCertificateForm(forms.ModelForm):
     class Meta:
-        model = ProjectStage
-        fields = ['status', 'start_date', 'end_date', 'document', 'notes']
+        model = PaymentCertificate
+        fields = [
+            'certificate_no', 'certificate_date',
+            'contingencies', 'estimated_omission', 'estimated_addition',
+            'work_completed_to_date', 'cost_of_escalation', 'materials_on_site',
+            'retention_rate', 'fluctuation_claims', 'refund_advance_payment',
+            'amount_previously_certified'
+        ]
+        widgets = {
+            'certificate_date': forms.DateInput(attrs={'type': 'date', 'class': 'form-control'}),
+            'certificate_no': forms.TextInput(attrs={'class': 'form-control'}),
+            'contingencies': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01'}),
+            'estimated_omission': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01'}),
+            'estimated_addition': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01'}),
+            'work_completed_to_date': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01'}),
+            'cost_of_escalation': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01'}),
+            'materials_on_site': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01'}),
+            'retention_rate': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01'}),
+            'fluctuation_claims': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01'}),
+            'refund_advance_payment': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01'}),
+            'amount_previously_certified': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01'}),
+        }
+        labels = {
+            'certificate_no': 'Payment Certificate No',
+            'certificate_date': 'Date',
+            'contingencies': 'LESS CONTINGENCIES',
+            'estimated_omission': 'LESS ESTIMATED OMISSION',
+            'estimated_addition': 'ADD ESTIMATED ADDITION',
+            'work_completed_to_date': 'WORK COMPLETED TO DATE',
+            'cost_of_escalation': 'COST OF ESCALATION',
+            'materials_on_site': 'MATERIALS ON SITE',
+            'retention_rate': 'RETENTION RATE (%)',
+            'fluctuation_claims': 'FLUCTUATION/OTHER CLAIMS',
+            'refund_advance_payment': 'REFUND OF ADVANCE PAYMENT',
+            'amount_previously_certified': 'AMOUNT PREVIOUSLY CERTIFIED',
+        }
 
 class ContractAwardForm(forms.ModelForm):
     contract_amount = forms.DecimalField(max_digits=15, decimal_places=2, label="Contract Amount (₦)")
