@@ -300,9 +300,13 @@
                                 <i class="bi bi-gear me-2"></i>Settings
                             </a></li>
                             <li><hr class="dropdown-divider"></li>
-                            <li><a class="dropdown-item" href="{% url 'logout' %}">
+                            <!-- Replace your current logout link with this form -->
+                            <form id="logout-form" method="post" action="{% url 'logout' %}" style="display: none;">
+                                {% csrf_token %}
+                            </form>
+                            <a class="dropdown-item" href="#" onclick="event.preventDefault(); document.getElementById('logout-form').submit();">
                                 <i class="bi bi-box-arrow-right me-2"></i>Logout
-                            </a></li>
+                            </a>
                         </ul>
                     </li>
                 </ul>
@@ -362,6 +366,8 @@
                     <span>Reports</span>
                 </a>
                 {% endif %}
+
+                
                 
                 {% if perms.accounts.view_user %}
                 <a class="nav-link" href="{% url 'user_list' %}">
@@ -381,6 +387,8 @@
                     <i class="bi bi-gear"></i>
                     <span>Settings</span>
                 </a>
+
+                
             </nav>
             
             <hr class="my-3">

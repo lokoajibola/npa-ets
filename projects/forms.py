@@ -3,6 +3,8 @@ from django.utils import timezone
 from .models import Project, ProjectStage, ProjectDocument, ProgressReport
 from django.contrib.auth import get_user_model
 from .models import ProjectStage, BOQItem 
+from .models import Project, PORT_LOCATION_CHOICES, DEPARTMENT_CHOICES
+
 
 User = get_user_model()
 
@@ -10,29 +12,56 @@ class ProjectForm(forms.ModelForm):
     class Meta:
         model = Project
         fields = [
-            'title', 'description', 'project_type', 'location', 'port_location',
-            'estimated_budget', 'proposed_start_date', 'proposed_end_date',
-            'priority', 'project_manager', 'supervisor'
+            'title', 'description', 'project_type', 'department', 'location', 'other_location',
+            'estimated_budget', 'budget_head', 'proposed_start_date', 'proposed_end_date',
+            'priority'
         ]
         widgets = {
-            'proposed_start_date': forms.DateInput(attrs={'type': 'date'}),
-            'proposed_end_date': forms.DateInput(attrs={'type': 'date'}),
+            'proposed_start_date': forms.DateInput(attrs={'type': 'date', 'class': 'form-control'}),
+            'proposed_end_date': forms.DateInput(attrs={'type': 'date', 'class': 'form-control'}),
             'description': forms.Textarea(attrs={'rows': 4, 'placeholder': 'Project description...'}),
+            'other_location': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Specify location'}),
+            'budget_head': forms.Select(attrs={'class': 'form-control'}),
         }
         labels = {
             'estimated_budget': 'Estimated Budget (₦)',
+            'budget_head': 'Budget Head',
+            'other_location': 'Other Location (specify)',
         }
+    
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+         # Filter budget heads based on department selection
+        self.fields['budget_head'].queryset = Budget.objects.none()
+        
+        if 'department' in self.data:
+            try:
+                department = self.data.get('department')
+                self.fields['budget_head'].queryset = Budget.objects.filter(
+                    department=department
+                ).order_by('-year', 'budget_code')
+            except (ValueError, TypeError):
+                pass
+        elif self.instance.pk and self.instance.department:
+            self.fields['budget_head'].queryset = Budget.objects.filter(
+                department=self.instance.department
+            ).order_by('-year', 'budget_code')
     
     def clean(self):
         cleaned_data = super().clean()
+        location = cleaned_data.get('location')
+        other_location = cleaned_data.get('other_location')
+        
+        # Validate other_location is provided if location is 'other'
+        if location == 'other' and not other_location:
+            raise forms.ValidationError("Please specify the location when 'Other' is selected")
+        
+        # Dates are now optional, so only validate if both are provided
         start_date = cleaned_data.get('proposed_start_date')
         end_date = cleaned_data.get('proposed_end_date')
         
         if start_date and end_date and start_date > end_date:
             raise forms.ValidationError("Start date cannot be after end date")
-        
-        if start_date and start_date < timezone.now().date():
-            raise forms.ValidationError("Start date cannot be in the past")
         
         return cleaned_data
 
@@ -95,6 +124,21 @@ class ProgressReportForm(forms.ModelForm):
         
         return cleaned_data
     
+from .models import Budget, BudgetItem, DEPARTMENT_CHOICES
+
+class BudgetForm(forms.ModelForm):
+    class Meta:
+        model = Budget
+        fields = ['budget_head', 'department', 'year', 'budget_type']
+        widgets = {
+            'budget_head': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'e.g., Headquarters Solar Project'}),
+            'department': forms.Select(attrs={'class': 'form-control'}),
+            'year': forms.NumberInput(attrs={'class': 'form-control', 'min': 2020, 'max': 2030}),
+            'budget_type': forms.Select(attrs={'class': 'form-control'}),
+        }
+        labels = {
+            'budget_head': 'Budget Head Description',
+        }
 
 class SiteInspectionForm(forms.ModelForm):
     inspection_date = forms.DateField(widget=forms.DateInput(attrs={'type': 'date'}))

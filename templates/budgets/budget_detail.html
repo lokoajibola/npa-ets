@@ -1,0 +1,303 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block page_title %}{{ budget.budget_code }} - {{ budget.budget_head }}{% endblock %}
+
+{% block extra_css %}
+<style>
+    .summary-card {
+        background-color: #f8f9fa;
+        border-left: 4px solid #003087;
+        padding: 15px;
+        margin-bottom: 20px;
+        border-radius: 5px;
+    }
+    .summary-item {
+        font-size: 1rem;
+        margin-bottom: 8px;
+    }
+    .summary-label {
+        font-weight: 600;
+        color: #495057;
+        display: inline-block;
+        width: 120px;
+    }
+    .summary-value {
+        font-weight: 500;
+    }
+    .section-header {
+        background-color: #e9ecef;
+        padding: 10px 15px;
+        margin-top: 20px;
+        margin-bottom: 10px;
+        border-radius: 5px;
+        font-weight: 600;
+        font-size: 1.1rem;
+        border-left: 4px solid #003087;
+    }
+    .items-table {
+        font-size: 0.9rem;
+    }
+    .items-table th {
+        background-color: #003087;
+        color: white;
+        font-weight: 600;
+        padding: 10px;
+    }
+    .items-table td {
+        padding: 8px 10px;
+        vertical-align: middle;
+    }
+    .amount-cell {
+        text-align: right;
+        font-family: 'Courier New', monospace;
+        font-weight: 500;
+    }
+    .total-row {
+        background-color: #d4edda;
+        font-weight: 700;
+    }
+    .grand-total-row {
+        background-color: #c3e6cb;
+        font-weight: 800;
+    }
+    .status-badge {
+        padding: 4px 8px;
+        border-radius: 4px;
+        font-size: 0.8rem;
+        font-weight: 600;
+    }
+    .status-available {
+        background-color: #d4edda;
+        color: #155724;
+    }
+    .status-allocated {
+        background-color: #fff3cd;
+        color: #856404;
+    }
+    .status-exhausted {
+        background-color: #f8d7da;
+        color: #721c24;
+    }
+    .budget-meta {
+        background-color: #f8f9fa;
+        padding: 15px;
+        border-radius: 5px;
+        margin-bottom: 20px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Header Card -->
+    <div class="card mb-4">
+        <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+            <h5 class="mb-0"><i class="bi bi-calculator me-2"></i>Budget Details: {{ budget.budget_code }}</h5>
+            <div>
+                <a href="{% url 'budget_items' budget_id=budget.budget_id %}" class="btn btn-light btn-sm me-2">
+                    <i class="bi bi-pencil-square me-1"></i>Edit Items
+                </a>
+                <a href="{% url 'budget_list' %}" class="btn btn-light btn-sm">
+                    <i class="bi bi-arrow-left me-1"></i>Back to List
+                </a>
+            </div>
+        </div>
+        <div class="card-body">
+            <!-- Budget Summary -->
+            <div class="budget-meta">
+                <div class="row">
+                    <div class="col-md-8">
+                        <h4 class="mb-3">{{ budget.budget_head }}</h4>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <table class="table table-sm table-borderless">
+                                    <tr>
+                                        <td width="40%"><strong>Budget Code:</strong></td>
+                                        <td>{{ budget.budget_code }}</td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Department:</strong></td>
+                                        <td>{{ budget.get_department_display }}</td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Budget Type:</strong></td>
+                                        <td>{{ budget.get_budget_type_display }}</td>
+                                    </tr>
+                                </table>
+                            </div>
+                            <div class="col-md-6">
+                                <table class="table table-sm table-borderless">
+                                    <tr>
+                                        <td width="40%"><strong>Year:</strong></td>
+                                        <td>{{ budget.year }}</td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Created By:</strong></td>
+                                        <td>{{ budget.created_by.get_full_name|default:budget.created_by.username }}</td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Created:</strong></td>
+                                        <td>{{ budget.created_at|date:"d/m/Y" }}</td>
+                                    </tr>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="text-end">
+                            <div style="font-size: 1.1rem; color: #003087;">Total Budget</div>
+                            <div style="font-size: 2.5rem; font-weight: 700; color: #28a745;">
+                                ₦{{ budget.total_amount|floatformat:2 }}
+                            </div>
+                            
+                            <!-- Allocation Status -->
+                            {% with total_allocated=0 %}
+                                {% for allocation in budget.project_allocations.all %}
+                                    {% with total_allocated=total_allocated|add:allocation.allocated_amount %}
+                                    {% endwith %}
+                                {% endfor %}
+                                {% with remaining=budget.total_amount|add:total_allocated %}
+                                <div class="mt-2">
+                                    <span class="status-badge 
+                                        {% if remaining <= 0 %}status-exhausted
+                                        {% elif remaining < budget.total_amount %}status-allocated
+                                        else %}status-available{% endif %}">
+                                        {% if remaining <= 0 %}Fully Allocated
+                                        {% elif remaining < budget.total_amount %}Partially Allocated
+                                        {% else %}Available{% endif %}
+                                    </span>
+                                    <span class="ms-2">₦{{ remaining|floatformat:2 }} remaining</span>
+                                </div>
+                                {% endwith %}
+                            {% endwith %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Budget Items by Section -->
+            <h5 class="mt-4 mb-3"><i class="bi bi-list-ul me-2"></i>Budget Items (Budget Heads)</h5>
+            
+            {% if sections %}
+                {% for section_name, items in sections.items %}
+                <div class="section-header">
+                    {{ section_name }}
+                </div>
+                
+                <div class="table-responsive">
+                    <table class="table table-bordered items-table">
+                        <thead>
+                            <tr>
+                                <th width="8%">S/N</th>
+                                <th width="12%">CTR</th>
+                                <th width="35%">Budget Head (Expenditure Description)</th>
+                                <th width="15%" class="text-end">Proposed Amount (₦)</th>
+                                <th width="15%">Justification</th>
+                                <th width="15%">Remarks</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for item in items %}
+                            <tr>
+                                <td class="text-center">{{ forloop.counter }}</td>
+                                <td><strong>{{ item.ctr }}</strong></td>
+                                <td>{{ item.expenditure_description }}</td>
+                                <td class="amount-cell">₦{{ item.proposed_amount|floatformat:2 }}</td>
+                                <td>{{ item.justification|default:"—"|truncatechars:30 }}</td>
+                                <td>{{ item.remarks|default:"—"|truncatechars:30 }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% endfor %}
+                
+                <!-- Grand Total -->
+                <div class="row mt-4">
+                    <div class="col-md-6 offset-md-6">
+                        <table class="table table-bordered">
+                            <tr class="grand-total-row">
+                                <td class="text-end" style="width: 60%;"><strong>TOTAL BUDGET:</strong></td>
+                                <td class="amount-cell" style="width: 40%; font-size: 1.2rem;">
+                                    <strong>₦{{ budget.total_amount|floatformat:2 }}</strong>
+                                </td>
+                            </tr>
+                        </table>
+                    </div>
+                </div>
+            {% else %}
+                <div class="alert alert-warning">
+                    <i class="bi bi-exclamation-triangle me-2"></i>
+                    No budget items found. 
+                    <a href="{% url 'budget_items' budget_id=budget.budget_id %}" class="alert-link">Add budget items now</a>.
+                </div>
+            {% endif %}
+
+            <!-- Projects Using This Budget -->
+            {% if budget.project_allocations.all %}
+            <h5 class="mt-5 mb-3"><i class="bi bi-folder me-2"></i>Projects Using This Budget</h5>
+            
+            <div class="table-responsive">
+                <table class="table table-bordered items-table">
+                    <thead>
+                        <tr>
+                            <th>Project ID</th>
+                            <th>Project Title</th>
+                            <th>Department</th>
+                            <th class="text-end">Allocated Amount</th>
+                            <th class="text-end">Remaining Balance</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for allocation in budget.project_allocations.all %}
+                        <tr>
+                            <td>
+                                <a href="{% url 'project_detail' project_id=allocation.project.project_id %}">
+                                    {{ allocation.project.project_id }}
+                                </a>
+                            </td>
+                            <td>{{ allocation.project.title }}</td>
+                            <td>{{ allocation.project.get_department_display }}</td>
+                            <td class="amount-cell">₦{{ allocation.allocated_amount|floatformat:2 }}</td>
+                            <td class="amount-cell">₦{{ allocation.remaining_balance|floatformat:2 }}</td>
+                            <td>
+                                {% if allocation.remaining_balance <= 0 %}
+                                    <span class="badge bg-danger">Fully Utilized</span>
+                                {% elif allocation.remaining_balance < allocation.allocated_amount %}
+                                    <span class="badge bg-warning">Partially Utilized</span>
+                                {% else %}
+                                    <span class="badge bg-success">Available</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% endif %}
+
+            <!-- Footer -->
+            <div class="row mt-4">
+                <div class="col-md-6">
+                    <small class="text-muted">
+                        <i class="bi bi-calendar me-1"></i> Created: {{ budget.created_at|date:"d/m/Y H:i" }}
+                    </small>
+                </div>
+                <div class="col-md-6 text-end">
+                    <small class="text-muted">
+                        <i class="bi bi-arrow-repeat me-1"></i> Last Updated: {{ budget.updated_at|date:"d/m/Y H:i" }}
+                    </small>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        console.log('Budget detail page loaded');
+    });
+</script>
+{% endblock %}

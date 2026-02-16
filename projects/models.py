@@ -27,6 +27,37 @@ class Contractor(models.Model):
     def __str__(self):
         return f"{self.name} ({self.registration_number})"
 
+# Add this at the top with other choices
+PORT_LOCATION_CHOICES = [
+    ('hq', 'Headquarters (HQ)'),
+    ('lpc', 'Lagos Port Complex (LPC)'),
+    ('tincan', 'Tincan Island Port Complex (TCIPC)'),
+    ('rivers', 'Rivers Port (RP)'),
+    ('delta', 'Delta Port (DP)'),
+    ('calabar', 'Calabar Port (CAL)'),
+    ('lekki', 'Lekki Port'),
+    ('flt', 'Federal Lighter Terminal Onne (FLT)'),
+    ('fot', 'Federal Ocean Terminal (FOT)'),
+    ('other', 'Other'),
+]
+
+BUDGET_TYPE_CHOICES = [
+    ('capex', 'CAPEX - Capital Expenditure'),
+    ('opex', 'OPEX - Operational Expenditure'),
+    ('overhead', 'Overhead'),
+    ('special', 'Special Project'),
+]
+
+DEPARTMENT_CHOICES = [
+    ('civil', 'Civil Engineering'),
+    ('electrical', 'Electrical Engineering'),
+    ('mechanical', 'Mechanical Engineering'),
+    ('marine', 'Marine Engineering'),
+    ('planning', 'Planning & Design'),
+    ('maintenance', 'Maintenance'),
+    ('dredging', 'Dredging'),
+    ('csr', 'Corporate Social Responsibility'),
+]
 
 # Project Model - MUST EXIST AND BE DEFINED FIRST
 class Project(models.Model):
@@ -58,22 +89,24 @@ class Project(models.Model):
         ('rehabilitation', 'Rehabilitation'),
         ('new_construction', 'New Construction'),
     ]
+
     
     project_id = models.CharField(max_length=50, unique=True, primary_key=True)
     title = models.CharField(max_length=200)
     description = models.TextField()
     project_type = models.CharField(max_length=50, choices=PROJECT_TYPE_CHOICES)
-    location = models.CharField(max_length=200)
-    port_location = models.CharField(max_length=100, blank=True)
-    
+    location = models.CharField(max_length=50, choices=PORT_LOCATION_CHOICES, default='hq')
+    other_location = models.CharField(max_length=200, blank=True, help_text="Specify if location is 'Other'")
+    department = models.CharField(max_length=50, choices=DEPARTMENT_CHOICES, default='civil')
+
     # Budget fields
     estimated_budget = models.DecimalField(max_digits=15, decimal_places=2)
     approved_budget = models.DecimalField(max_digits=15, decimal_places=2, null=True, blank=True)
     spent_budget = models.DecimalField(max_digits=15, decimal_places=2, default=0)
     
     # Timeline
-    proposed_start_date = models.DateField()
-    proposed_end_date = models.DateField()
+    proposed_start_date = models.DateField(null=True, blank=True)
+    proposed_end_date = models.DateField(null=True, blank=True)
     approved_start_date = models.DateField(null=True, blank=True)
     approved_end_date = models.DateField(null=True, blank=True)
     actual_start_date = models.DateField(null=True, blank=True)
@@ -94,6 +127,7 @@ class Project(models.Model):
     contractor = models.ForeignKey(Contractor, on_delete=models.SET_NULL, null=True, blank=True)
     contractor_address = models.CharField(max_length=100, blank=True)
     contractor_phone = models.CharField(max_length=20, blank=True)
+
     # Contract fields
     contract_sum = models.DecimalField(max_digits=15, decimal_places=2, null=True, blank=True, help_text="Total contract sum")
     contingencies = models.DecimalField(max_digits=15, decimal_places=2, null=True, blank=True, default=0)
@@ -117,6 +151,9 @@ class Project(models.Model):
     approved_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True,
                                    related_name='approved_projects')
     
+
+    budget_head = models.CharField(max_length=100, blank=True, help_text="Budget head code/reference")
+
     class Meta:
         ordering = ['-created_at']
     
@@ -287,6 +324,72 @@ class ProjectDocument(models.Model):
     
     def __str__(self):
         return f"{self.title} - {self.project.project_id}"
+
+class Budget(models.Model):
+    BUDGET_TYPE_CHOICES = [
+        ('capex', 'CAPEX - Capital Expenditure'),
+        ('opex', 'OPEX - Operational Expenditure'),
+        ('overhead', 'Overhead'),
+        ('special', 'Special Project'),
+    ]
+    
+    budget_id = models.UUIDField(default=uuid.uuid4, editable=False, unique=True)
+    budget_code = models.CharField(max_length=50, unique=True, help_text="e.g., ENG-CAP-2026-001")
+    budget_head = models.CharField(max_length=200)
+    department = models.CharField(max_length=50, choices=DEPARTMENT_CHOICES)
+    year = models.IntegerField()
+    budget_type = models.CharField(max_length=20, choices=BUDGET_TYPE_CHOICES)
+    total_amount = models.DecimalField(max_digits=15, decimal_places=2, default=0)
+    
+    # Metadata
+    created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        ordering = ['-year', 'department', 'budget_code']
+    
+    def __str__(self):
+        return f"{self.budget_code} - {self.budget_head} ({self.get_department_display()})"
+
+class BudgetItem(models.Model):
+    item_id = models.UUIDField(default=uuid.uuid4, editable=False, unique=True)
+    budget = models.ForeignKey(Budget, on_delete=models.CASCADE, related_name='items')
+    
+    ctr = models.CharField(max_length=50, help_text="Cost Tracking Reference")
+    expenditure_description = models.TextField()
+    proposed_amount = models.DecimalField(max_digits=15, decimal_places=2)
+    justification = models.TextField(blank=True)
+    remarks = models.TextField(blank=True)
+    
+    # For section grouping
+    section = models.CharField(max_length=200, default='Main Budget')
+    order = models.IntegerField(default=0)
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        ordering = ['section', 'order']
+    
+    def __str__(self):
+        return f"{self.ctr} - {self.expenditure_description[:50]}"
+
+class ProjectBudgetAllocation(models.Model):
+    """Links a project to a budget head"""
+    allocation_id = models.UUIDField(default=uuid.uuid4, editable=False, unique=True)
+    project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name='budget_allocations')
+    budget = models.ForeignKey(Budget, on_delete=models.CASCADE, related_name='project_allocations')
+    allocated_amount = models.DecimalField(max_digits=15, decimal_places=2)
+    remaining_balance = models.DecimalField(max_digits=15, decimal_places=2)
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        unique_together = ['project', 'budget']
+    
+    def __str__(self):
+        return f"{self.project.project_id} - {self.budget.budget_head}"
 
 
 # projects/models.py

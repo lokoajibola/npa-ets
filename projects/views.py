@@ -8,7 +8,186 @@ from django.db.models import Q
 from .models import PaymentCertificate, Project, ProjectStage, ProjectDocument, ProgressReport, Contractor, BOQItem
 from .forms import ProjectForm, ProjectStageForm, ProjectDocumentForm, ProgressReportForm, SiteInspectionForm, ProjectProposalForm, ContractAwardForm, DueDiligenceForm, PaymentCertificateForm, NominationSupervisorForm
 from django.utils import timezone
-from .forms import ContractorForm
+from .forms import ContractorForm, BudgetForm
+from django.db.models import Sum
+from .models import Budget, BudgetItem, ProjectBudgetAllocation
+# projects/views.py
+from django.http import JsonResponse
+
+@login_required
+def api_budgets_by_department(request):
+    department = request.GET.get('department')
+    if department:
+        budgets = Budget.objects.filter(department=department).values(
+            'id', 'budget_code', 'budget_head', 'total_amount'
+        )
+        return JsonResponse(list(budgets), safe=False)
+    return JsonResponse([], safe=False)
+
+
+@login_required
+def budget_list_view(request):
+    budgets = Budget.objects.all().order_by('-year', 'department')
+    
+    # Calculate totals for each budget
+    for budget in budgets:
+        budget.total = budget.items.aggregate(total=Sum('proposed_amount'))['total'] or 0
+    
+    context = {
+        'budgets': budgets,
+        'page_title': 'Budget Management',
+    }
+    return render(request, 'budgets/budget_list.html', context)
+
+@login_required
+def budget_create_view(request):
+    """Create a new budget (standalone, not tied to project)"""
+    if request.method == 'POST':
+        form = BudgetForm(request.POST)
+        if form.is_valid():
+            budget = form.save(commit=False)
+            budget.created_by = request.user
+            
+            # Generate budget code
+            year = budget.year
+            dept_code = dict(budget._meta.get_field('department').choices).get(budget.department, 'GEN')[:3].upper()
+            type_code = budget.budget_type[:3].upper()
+            
+            count = Budget.objects.filter(
+                year=year,
+                department=budget.department,
+                budget_type=budget.budget_type
+            ).count() + 1
+            
+            budget.budget_code = f"{dept_code}-{type_code}-{year}-{count:03d}"
+            budget.save()
+            
+            # Handle budget items
+            items_data = request.POST.get('items_data', '[]')
+            try:
+                items_list = json.loads(items_data)
+                for order, item_data in enumerate(items_list):
+                    BudgetItem.objects.create(
+                        budget=budget,
+                        ctr=item_data.get('ctr', ''),
+                        expenditure_description=item_data.get('description', ''),
+                        proposed_amount=Decimal(str(item_data.get('amount', '0'))),
+                        justification=item_data.get('justification', ''),
+                        remarks=item_data.get('remarks', ''),
+                        section=item_data.get('section', 'Main Budget'),
+                        order=order
+                    )
+                
+                # Update budget total
+                total = budget.items.aggregate(total=Sum('proposed_amount'))['total'] or 0
+                budget.total_amount = total
+                budget.save()
+                
+                messages.success(request, f'Budget "{budget.budget_code}" created successfully!')
+                return redirect('budget_detail', budget_id=budget.budget_id)
+                
+            except Exception as e:
+                messages.error(request, f'Error saving budget items: {str(e)}')
+                budget.delete()  # Rollback
+        else:
+            messages.error(request, 'Please correct the errors below.')
+    else:
+        form = BudgetForm()
+    
+    context = {
+        'form': form,
+        'page_title': 'Create Budget',
+        'departments': Budget._meta.get_field('department').choices,
+        'budget_types': Budget._meta.get_field('budget_type').choices,
+        'current_year': timezone.now().year,
+    }
+    return render(request, 'budgets/budget_form.html', context)
+
+@login_required
+def budget_detail_view(request, budget_id):
+    budget = get_object_or_404(Budget, budget_id=budget_id)
+    items = budget.items.all().order_by('section', 'order')
+    
+    # Group items by section
+    sections = {}
+    for item in items:
+        if item.section not in sections:
+            sections[item.section] = []
+        sections[item.section].append(item)
+    
+    # Calculate total
+    total = items.aggregate(total=Sum('proposed_amount'))['total'] or 0
+    
+    # Get projects using this budget
+    allocations = budget.project_allocations.all()
+    
+    context = {
+        'budget': budget,
+        'sections': sections,
+        'total': total,
+        'allocations': allocations,
+        'page_title': f'Budget: {budget.budget_code}',
+    }
+    return render(request, 'budgets/budget_detail.html', context)
+
+@login_required
+def budget_items_view(request, budget_id):
+    budget = get_object_or_404(Budget, budget_id=budget_id)
+    
+    if request.method == 'POST':
+        items_data = request.POST.get('items_data', '[]')
+        
+        try:
+            items_list = json.loads(items_data)
+            
+            # Delete existing items
+            budget.items.all().delete()
+            
+            # Create new items
+            order = 0
+            for item_data in items_list:
+                BudgetItem.objects.create(
+                    budget=budget,
+                    ctr=item_data.get('ctr', ''),
+                    expenditure_description=item_data.get('description', ''),
+                    proposed_amount=Decimal(str(item_data.get('amount', '0'))),
+                    justification=item_data.get('justification', ''),
+                    remarks=item_data.get('remarks', ''),
+                    section=item_data.get('section', 'Main Budget'),
+                    order=order
+                )
+                order += 1
+            
+            # Update budget total
+            total = budget.items.aggregate(total=Sum('proposed_amount'))['total'] or 0
+            budget.total_amount = total
+            budget.save()
+            
+            messages.success(request, 'Budget items saved successfully!')
+            return redirect('budget_detail', budget_id=budget.budget_id)
+            
+        except Exception as e:
+            messages.error(request, f'Error saving budget items: {str(e)}')
+    
+    # Get existing items
+    items = budget.items.all().order_by('section', 'order')
+    initial_items = []
+    for item in items:
+        initial_items.append({
+            'section': item.section,
+            'ctr': item.ctr,
+            'description': item.expenditure_description,
+            'amount': str(item.proposed_amount),
+            'justification': item.justification,
+            'remarks': item.remarks
+        })
+    
+    context = {
+        'budget': budget,
+        'initial_items': json.dumps(initial_items),
+        'page_title': f'Edit Items - {budget.budget_code}',
+    }
+    return render(request, 'budgets/budget_items.html', context)
 
 @login_required
 def contractor_list(request):
@@ -242,6 +421,74 @@ class ProjectUpdateView(LoginRequiredMixin, UpdateView):
     def form_valid(self, form):
         messages.success(self.request, 'Project updated successfully!')
         return super().form_valid(form)
+
+from .models import DEPARTMENT_CHOICES, PORT_LOCATION_CHOICES, BUDGET_TYPE_CHOICES, BudgetItem
+
+@login_required
+def project_budget_view(request, project_id):
+    project = get_object_or_404(Project, project_id=project_id)
+    
+    # Get existing budget items
+    budget_items = project.budget_items.all().order_by('section', 'order')
+    
+    if request.method == 'POST':
+        # Handle budget data from hidden field
+        budget_data = request.POST.get('budget_data', '[]')
+        
+        try:
+            budget_items_data = json.loads(budget_data)
+            
+            # Delete existing budget items
+            project.budget_items.all().delete()
+            
+            # Create new budget items
+            order = 0
+            for item_data in budget_items_data:
+                BudgetItem.objects.create(
+                    project=project,
+                    department=item_data.get('department', project.department),
+                    year=item_data.get('year', timezone.now().year),
+                    budget_type=item_data.get('budget_type', 'capex'),
+                    ctr=item_data.get('ctr', ''),
+                    expenditure_description=item_data.get('description', ''),
+                    proposed_amount=Decimal(str(item_data.get('amount', '0'))),
+                    justification=item_data.get('justification', ''),
+                    remarks=item_data.get('remarks', ''),
+                    section=item_data.get('section', 'Main Budget'),
+                    order=order
+                )
+                order += 1
+            
+            messages.success(request, 'Budget saved successfully!')
+            return redirect('project_detail', project_id=project_id)
+            
+        except Exception as e:
+            messages.error(request, f'Error saving budget: {str(e)}')
+    
+    # Prepare initial data
+    initial_items = []
+    for item in budget_items:
+        initial_items.append({
+            'section': item.section,
+            'ctr': item.ctr,
+            'description': item.expenditure_description,
+            'amount': str(item.proposed_amount),
+            'justification': item.justification,
+            'remarks': item.remarks,
+            'department': item.department,
+            'year': item.year,
+            'budget_type': item.budget_type
+        })
+    
+    context = {
+        'project': project,
+        'initial_items': json.dumps(initial_items),
+        'page_title': f'Budget - {project.project_id}',
+        'departments': DEPARTMENT_CHOICES,
+        'budget_types': BudgetItem.BUDGET_TYPE_CHOICES,
+        'current_year': timezone.now().year,
+    }
+    return render(request, 'projects/project_budget.html', context)
 
 # Update Project Stage
 @login_required
