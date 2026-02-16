@@ -347,6 +347,13 @@
                     {% endif %}
                 </a>
                 {% endif %}
+
+                {% if perms.contractors.view_contractor %}
+                <a class="nav-link {% if 'contractors' in request.path %}active{% endif %}" 
+                href="{% url 'contractor_list' %}">
+                    <i class="bi bi-building me-2"></i>Contractors
+                </a>
+                {% endif %}
                 
                 {% if perms.reports.view_report %}
                 <a class="nav-link {% if 'reports' in request.path %}active{% endif %}" 

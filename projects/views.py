@@ -5,9 +5,70 @@ from django.views.generic import ListView, DetailView, CreateView, UpdateView
 from django.urls import reverse_lazy
 from django.contrib import messages
 from django.db.models import Q
-from .models import Project, ProjectStage, ProjectDocument, ProgressReport, Contractor, BOQItem
+from .models import PaymentCertificate, Project, ProjectStage, ProjectDocument, ProgressReport, Contractor, BOQItem
 from .forms import ProjectForm, ProjectStageForm, ProjectDocumentForm, ProgressReportForm, SiteInspectionForm, ProjectProposalForm, ContractAwardForm, DueDiligenceForm, PaymentCertificateForm, NominationSupervisorForm
 from django.utils import timezone
+from .forms import ContractorForm
+
+@login_required
+def contractor_list(request):
+    contractors = Contractor.objects.all().order_by('name')
+    return render(request, 'contractors/contractor_list.html', {
+        'contractors': contractors,
+        'page_title': 'Contractors'
+    })
+
+@login_required
+def contractor_create(request):
+    if request.method == 'POST':
+        form = ContractorForm(request.POST)
+        if form.is_valid():
+            contractor = form.save()
+            messages.success(request, f'Contractor "{contractor.name}" created successfully!')
+            
+            # If coming from a project, redirect back to that project
+            project_id = request.GET.get('project')
+            stage_id = request.GET.get('stage')
+            if project_id and stage_id:
+                return redirect('contract_award', project_id=project_id, stage_id=stage_id)
+            return redirect('contractor_list')
+    else:
+        form = ContractorForm(initial={'name': 'MESSRS '})
+    
+    return render(request, 'contractors/contractor_form.html', {
+        'form': form,
+        'page_title': 'Add Contractor'
+    })
+
+@login_required
+def contractor_update(request, contractor_id):
+    contractor = get_object_or_404(Contractor, contractor_id=contractor_id)
+    
+    if request.method == 'POST':
+        form = ContractorForm(request.POST, instance=contractor)
+        if form.is_valid():
+            form.save()
+            messages.success(request, f'Contractor "{contractor.name}" updated successfully!')
+            return redirect('contractor_list')
+    else:
+        form = ContractorForm(instance=contractor)
+    
+    return render(request, 'contractors/contractor_form.html', {
+        'form': form,
+        'contractor': contractor,
+        'page_title': f'Edit {contractor.name}'
+    })
+
+@login_required
+def contractor_detail(request, contractor_id):
+    contractor = get_object_or_404(Contractor, contractor_id=contractor_id)
+    projects = Project.objects.filter(contractor=contractor)
+    
+    return render(request, 'contractors/contractor_detail.html', {
+        'contractor': contractor,
+        'projects': projects,
+        'page_title': contractor.name
+    })
 
 # Project List View
 class ProjectListView(LoginRequiredMixin, ListView):
@@ -366,15 +427,19 @@ def contract_award_view(request, project_id, stage_id):
         
         if form.is_valid():
             # Save the stage
-            stage = form.save()
+            stage = form.save(commit=False)
             
             # Get the selected contractor
             contractor = form.cleaned_data.get('contractor')
             if contractor:
-                project.contractor = contractor
                 stage.contractor = contractor
+                project.contractor = contractor
             
-            # Update project with contract information
+            # Save stage
+            stage.save()
+            
+            # CRITICAL: Update project with ALL contract information
+            # These fields need to exist in your Project model
             project.contract_sum = form.cleaned_data.get('contract_amount')
             project.contract_award_date = form.cleaned_data.get('contract_date')
             project.contract_award_ref = form.cleaned_data.get('contract_reference')
@@ -390,10 +455,10 @@ def contract_award_view(request, project_id, stage_id):
                     days=form.cleaned_data.get('contract_duration')
                 )
             
+            # Save project
             project.save()
-            stage.save()
             
-            # If stage is completed, update dates
+            # Update stage dates if completed
             if stage.status == 'completed' and not stage.end_date:
                 stage.end_date = timezone.now().date()
                 stage.save()
@@ -403,7 +468,24 @@ def contract_award_view(request, project_id, stage_id):
         else:
             messages.error(request, 'Please correct the errors below.')
     else:
-        form = ContractAwardForm(instance=stage)
+        # Pre-fill form with existing project data
+        initial = {}
+        if project.contract_sum:
+            initial['contract_amount'] = project.contract_sum
+        if project.contract_award_ref:
+            initial['contract_reference'] = project.contract_award_ref
+        if project.contract_award_date:
+            initial['contract_date'] = project.contract_award_date
+        if project.contract_duration:
+            initial['contract_duration'] = project.contract_duration
+        if project.performance_bond:
+            initial['performance_bond'] = project.performance_bond
+        if project.advance_payment:
+            initial['advance_payment'] = project.advance_payment
+        if project.retention_percentage:
+            initial['retention_percentage'] = project.retention_percentage
+        
+        form = ContractAwardForm(instance=stage, initial=initial)
     
     context = {
         'form': form,
@@ -584,6 +666,9 @@ def generate_beme_pdf(request, project_id, stage_id):
                 return ones[n // 100] + ' Hundred ' + convert_less_than_thousand(n % 100)
         
         result = ''
+        if num >= 1000000000:
+            result += convert_less_than_thousand(num // 1000000000) + ' Billion '
+            num %= 1000000000
         if num >= 1000000:
             result += convert_less_than_thousand(num // 1000000) + ' Million '
             num %= 1000000
@@ -618,6 +703,43 @@ def due_diligence_view(request, project_id, stage_id):
                               'due_diligence', DueDiligenceForm,
                               'stages/due_diligence.html')
 
+# Convert number to words
+def number_to_words(num):
+        num = int(round(num))
+        ones = ['', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine',
+                'Ten', 'Eleven', 'Twelve', 'Thirteen', 'Fourteen', 'Fifteen', 'Sixteen', 
+                'Seventeen', 'Eighteen', 'Nineteen']
+        tens = ['', '', 'Twenty', 'Thirty', 'Forty', 'Fifty', 'Sixty', 'Seventy', 'Eighty', 'Ninety']
+        
+        if num == 0:
+            return 'Zero Naira Only'
+        
+        def convert_less_than_thousand(n):
+            if n == 0:
+                return ''
+            elif n < 20:
+                return ones[n]
+            elif n < 100:
+                return tens[n // 10] + (' ' + ones[n % 10] if n % 10 != 0 else '')
+            else:
+                return ones[n // 100] + ' Hundred ' + convert_less_than_thousand(n % 100)
+        
+        result = ''
+        if num >= 1000000000:
+            result += convert_less_than_thousand(num // 1000000000) + ' Billion '
+            num %= 1000000000
+        if num >= 1000000:
+            result += convert_less_than_thousand(num // 1000000) + ' Million '
+            num %= 1000000
+        if num >= 1000:
+            result += convert_less_than_thousand(num // 1000) + ' Thousand '
+            num %= 1000
+        if num > 0:
+            result += convert_less_than_thousand(num)
+        
+        return result.strip() + ' Naira Only'
+    
+
 # projects/views.py
 @login_required
 def project_certification_view(request, project_id, stage_id):
@@ -637,6 +759,7 @@ def project_certification_view(request, project_id, stage_id):
             'certificate_no': f"CERT/{project.project_id}/{timezone.now().year}/001",
             'certificate_date': timezone.now().date(),
             'work_completed_to_date': project.contract_sum or 0,
+            
         }
     )
     
@@ -673,20 +796,154 @@ def project_certification_view(request, project_id, stage_id):
         'stage': stage,
         'certificate': certificate,
         'page_title': 'Payment Certificate',
+        
     }
     return render(request, 'stages/payment_certificate.html', context)
 
-@login_required  
+@login_required
+def certificate_pdf_view(request, project_id, certificate_id):
+    project = get_object_or_404(Project, project_id=project_id)
+    certificate = get_object_or_404(PaymentCertificate, certificate_id=certificate_id, project=project)
+    grand_total = certificate.amount_now_payable if certificate else 0
+    context = {
+        'project': project,
+        'certificate': certificate,
+        'generated_date': timezone.now(),
+        'grand_total_words': number_to_words(grand_total),
+    }
+    return render(request, 'stages/certificate_pdf_print.html', context)
+
+@login_required
 def contract_award_view(request, project_id, stage_id):
-    return stage_specific_view(request, project_id, stage_id,
-                              'contract_award', ContractAwardForm,
-                              'stages/contract_award.html')
+    project = get_object_or_404(Project, project_id=project_id)
+    stage = get_object_or_404(ProjectStage, stage_id=stage_id, project=project)
+    
+    if stage.stage_type != 'contract_award':
+        messages.error(request, "This is not a contract award stage")
+        return redirect('project_detail', project_id=project_id)
+    
+    if request.method == 'POST':
+        form = ContractAwardForm(request.POST, request.FILES, instance=stage)
+        
+        if form.is_valid():
+            # Save the stage first
+            stage = form.save(commit=False)
+            
+            # Get contractor from form (if selected)
+            contractor = form.cleaned_data.get('contractor')
+            
+            # If no contractor selected but we have contractor_name field
+            if not contractor and 'contractor_name' in form.cleaned_data:
+                contractor_name = form.cleaned_data.get('contractor_name', '').strip()
+                if contractor_name:
+                    # Clean the name (remove MESSRS prefix if present)
+                    clean_name = contractor_name.replace('MESSRS', '').strip()
+                    
+                    # Create new contractor
+                    contractor = Contractor.objects.create(
+                        name=clean_name,
+                        registration_number=f"CONT/{timezone.now().year}/001",
+                        contact_person=clean_name,
+                        phone=form.cleaned_data.get('contractor_phone', ''),
+                        email=form.cleaned_data.get('contractor_email', ''),
+                        address=form.cleaned_data.get('contractor_address', ''),
+                        tax_id='N/A',
+                        classification='General Contractor'
+                    )
+                    messages.info(request, f'New contractor "{clean_name}" created.')
+            
+            # Link contractor to stage and project
+            if contractor:
+                stage.contractor = contractor
+                project.contractor = contractor
+            
+            # Save stage
+            stage.save()
+            
+            # CRITICAL: Update project with ALL contract information
+            project.contract_sum = form.cleaned_data.get('contract_amount')
+            project.contract_award_date = form.cleaned_data.get('contract_date')
+            project.contract_award_ref = form.cleaned_data.get('contract_reference')
+            project.contract_duration = form.cleaned_data.get('contract_duration')
+            project.performance_bond = form.cleaned_data.get('performance_bond', 0)
+            project.advance_payment = form.cleaned_data.get('advance_payment', 0)
+            project.retention_percentage = form.cleaned_data.get('retention_percentage', 5.00)
+            
+            # Calculate completion date
+            if stage.start_date and form.cleaned_data.get('contract_duration'):
+                from datetime import timedelta
+                project.contract_completion_date = stage.start_date + timedelta(
+                    days=form.cleaned_data.get('contract_duration')
+                )
+            
+            # Save project with all updates
+            project.save()
+            
+            # Update stage end date if completed
+            if stage.status == 'completed' and not stage.end_date:
+                stage.end_date = timezone.now().date()
+                stage.save()
+            
+            messages.success(request, 'Contract awarded successfully! All project contract information updated.')
+            return redirect('project_detail', project_id=project_id)
+        else:
+            messages.error(request, 'Please correct the errors below.')
+    else:
+        # Pre-fill form with existing project data
+        initial = {}
+        if project.contract_sum:
+            initial['contract_amount'] = project.contract_sum
+        if project.contract_award_ref:
+            initial['contract_reference'] = project.contract_award_ref
+        if project.contract_award_date:
+            initial['contract_date'] = project.contract_award_date
+        if project.contract_duration:
+            initial['contract_duration'] = project.contract_duration
+        if project.performance_bond:
+            initial['performance_bond'] = project.performance_bond
+        if project.advance_payment:
+            initial['advance_payment'] = project.advance_payment
+        if project.retention_percentage:
+            initial['retention_percentage'] = project.retention_percentage
+        
+        form = ContractAwardForm(instance=stage, initial=initial)
+    
+    # Get all contractors for the dropdown
+    contractors = Contractor.objects.all().order_by('name')
+    
+    context = {
+        'form': form,
+        'project': project,
+        'stage': stage,
+        'contractors': contractors,
+        'page_title': 'Contract Award',
+    }
+    return render(request, 'stages/contract_award.html', context)
 
 @login_required
 def nomination_supervisor_view(request, project_id, stage_id):
     return stage_specific_view(request, project_id, stage_id,
                               'nominate_pm', NominationSupervisorForm,
                               'stages/nomination_supervisor.html')
+
+# Add to views.py
+@login_required
+def add_contractor(request, project_id):
+    project = get_object_or_404(Project, project_id=project_id)
+    
+    if request.method == 'POST':
+        form = ContractorForm(request.POST)
+        if form.is_valid():
+            contractor = form.save()
+            # Link to project
+            project.contractor = contractor
+            project.save()
+            messages.success(request, f'Contractor "{contractor.name}" added and linked to project.')
+            return redirect('contract_award', project_id=project_id, stage_id=stage_id)
+    else:
+        form = ContractorForm(initial={'name': 'MESSRS '})
+    
+    return render(request, 'contractors/contractor_form.html', {'form': form, 'project': project})
 
 # Generic stage view handler
 def stage_specific_view(request, project_id, stage_id, stage_type, form_class, template_name):

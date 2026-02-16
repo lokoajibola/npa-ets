@@ -122,6 +122,34 @@ class ProjectProposalForm(forms.ModelForm):
 from django import forms
 from .models import ProjectStage, Contractor
 
+class ContractorForm(forms.ModelForm):
+    class Meta:
+        model = Contractor
+        fields = [
+            'name', 'registration_number', 'contact_person', 
+            'phone', 'email', 'address', 'tax_id', 'classification'
+        ]
+        widgets = {
+            'name': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'MESSRS Contractor Name'}),
+            'registration_number': forms.TextInput(attrs={'class': 'form-control'}),
+            'contact_person': forms.TextInput(attrs={'class': 'form-control'}),
+            'phone': forms.TextInput(attrs={'class': 'form-control', 'placeholder': '+234-XXX-XXX-XXXX'}),
+            'email': forms.EmailInput(attrs={'class': 'form-control'}),
+            'address': forms.Textarea(attrs={'class': 'form-control', 'rows': 3}),
+            'tax_id': forms.TextInput(attrs={'class': 'form-control'}),
+            'classification': forms.TextInput(attrs={'class': 'form-control'}),
+        }
+        labels = {
+            'name': 'Contractor Name',
+            'registration_number': 'Registration Number',
+            'contact_person': 'Contact Person',
+            'phone': 'Phone Number',
+            'email': 'Email Address',
+            'address': 'Address',
+            'tax_id': 'Tax ID / VAT Number',
+            'classification': 'Classification',
+        }
+
 class ContractAwardForm(forms.ModelForm):
     # Keep contractor as ModelChoiceField but customize the display
     contractor = forms.ModelChoiceField(
@@ -294,22 +322,6 @@ class PaymentCertificateForm(forms.ModelForm):
             'amount_previously_certified': 'AMOUNT PREVIOUSLY CERTIFIED',
         }
 
-class ContractAwardForm(forms.ModelForm):
-    contract_amount = forms.DecimalField(max_digits=15, decimal_places=2, label="Contract Amount (₦)")
-    contract_duration = forms.IntegerField(label="Contract Duration (days)")
-    start_date = forms.DateField(widget=forms.DateInput(attrs={'type': 'date'}), label="Contract Start Date")
-    completion_date = forms.DateField(widget=forms.DateInput(attrs={'type': 'date'}), label="Contract Completion Date")
-    performance_bond = forms.DecimalField(max_digits=15, decimal_places=2, required=False, 
-                                         label="Performance Bond Amount (₦)")
-    advance_payment = forms.DecimalField(max_digits=15, decimal_places=2, required=False,
-                                        label="Advance Payment (₦)")
-    retention_percentage = forms.IntegerField(min_value=0, max_value=100, initial=5,
-                                            label="Retention Percentage (%)")
-    
-    class Meta:
-        model = ProjectStage
-        fields = ['status', 'contractor', 'contract_reference', 'contract_date', 
-                 'document', 'notes']
 
 class NominationSupervisorForm(forms.ModelForm):
     project_manager = forms.ModelChoiceField(

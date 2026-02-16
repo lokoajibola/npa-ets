@@ -1,0 +1,438 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Payment Certificate - {{ project.project_id }}</title>
+    {% load static %}
+    <style>
+        @page {
+            size: A4;
+            margin: 1.5cm;
+        }
+        
+        body {
+            font-family: Verdana, Geneva, sans-serif;
+            font-size: 10pt;
+            line-height: 1.4;
+            color: #000;
+            background: #fff;
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+        }
+        
+        @media print {
+            body {
+                margin: 0;
+                padding: 0;
+            }
+            .no-print {
+                display: none !important;
+            }
+            .watermark {
+                position: fixed;
+                top: 50%;
+                left: 50%;
+                transform: translate(-50%, -50%) rotate(-45deg);
+                opacity: 0.1;
+                z-index: -1;
+            }
+        }
+        
+        .watermark {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%) rotate(-45deg);
+            opacity: 0.1;
+            z-index: -1;
+            pointer-events: none;
+            text-align: center;
+            width: 100%;
+        }
+        
+        .watermark img {
+            width: 400px;
+            height: auto;
+        }
+        
+        .print-container {
+            max-width: 100%;
+            margin: 0 auto;
+            padding: 20px;
+            position: relative;
+        }
+        
+        .header {
+            text-align: center;
+            margin-bottom: 25px;
+            border-bottom: 2px solid #003087;
+            padding-bottom: 15px;
+        }
+        
+        .header h1 {
+            color: #003087;
+            font-size: 20pt;
+            margin: 5px 0;
+            font-weight: bold;
+        }
+        
+        .header h2 {
+            color: #003087;
+            font-size: 16pt;
+            margin: 5px 0;
+            font-weight: bold;
+        }
+        
+        .header h3 {
+            font-size: 14pt;
+            margin: 10px 0;
+            font-weight: bold;
+        }
+        
+        .certificate-title {
+            font-size: 16pt;
+            font-weight: bold;
+            text-align: center;
+            margin: 20px 0;
+            text-decoration: underline;
+        }
+        
+        .info-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 25px;
+            border: 1px solid #ccc;
+        }
+        
+        .info-table td {
+            padding: 8px 10px;
+            border: 1px solid #ccc;
+        }
+        
+        .info-table td:first-child {
+            font-weight: bold;
+            width: 30%;
+            background-color: #f8f9fa;
+        }
+        
+        .contract-info {
+            background-color: #f8f9fa;
+            padding: 15px;
+            border: 1px solid #ccc;
+            margin-bottom: 25px;
+        }
+        
+        .contract-info h4 {
+            color: #003087;
+            margin-top: 0;
+            margin-bottom: 15px;
+            font-size: 12pt;
+        }
+        
+        .certificate-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 25px 0;
+            font-size: 9pt;
+        }
+        
+        .certificate-table th {
+            background-color: #003087 !important;
+            color: white !important;
+            font-weight: bold;
+            padding: 8px;
+            text-align: center;
+            border: 1px solid #003087;
+        }
+        
+        .certificate-table td {
+            padding: 6px 8px;
+            border: 1px solid #ccc;
+            vertical-align: top;
+        }
+        
+        .certificate-table .label-cell {
+            font-weight: bold;
+            background-color: #f8f9fa;
+            width: 50%;
+        }
+        
+        .certificate-table .amount-cell {
+            text-align: right;
+            font-family: 'Courier New', monospace;
+            font-weight: 500;
+        }
+        
+        .certificate-table .total-row {
+            background-color: #d4edda !important;
+            font-weight: 700;
+        }
+        
+        .certificate-table .grand-total {
+            background-color: #c3e6cb !important;
+            font-weight: 800;
+            font-size: 11pt;
+        }
+        
+        .section-header {
+            background-color: #e9ecef !important;
+            font-weight: 700;
+            text-align: center;
+        }
+        
+        .footer {
+            margin-top: 40px;
+            font-size: 8pt;
+            color: #666;
+            border-top: 1px solid #ccc;
+            padding-top: 10px;
+            text-align: center;
+        }
+        
+        .print-button {
+            background-color: #003087;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12pt;
+            margin-bottom: 20px;
+        }
+        
+        .print-button:hover {
+            background-color: #002060;
+        }
+        
+        .amount-in-words {
+            margin-top: 30px;
+            padding: 15px;
+            border-top: 2px solid #003087;
+            font-style: italic;
+        }
+    </style>
+</head>
+<body>
+    <!-- Watermark -->
+    <div class="watermark">
+        <img src="{% static 'images/npa3.png' %}" alt="NPA Logo">
+    </div>
+
+    <div class="print-container">
+        <!-- Print Button (hidden when printing) -->
+        <div class="no-print" style="margin-bottom: 20px; text-align: center;">
+            <button class="print-button" onclick="window.print()">
+                <i class="bi bi-printer"></i> Print / Save as PDF
+            </button>
+            <button class="print-button" onclick="window.close()" style="background-color: #6c757d;">
+                <i class="bi bi-x-circle"></i> Close
+            </button>
+        </div>
+
+        <!-- Header -->
+        <div class="header">
+            <h1>NIGERIAN PORTS AUTHORITY</h1>
+            <h2>ENGINEERING DIVISION</h2>
+        </div>
+        
+        <div class="certificate-title">PAYMENT CERTIFICATE</div>
+        
+        <!-- Certificate Info -->
+        <table class="info-table">
+            <tr>
+                <td>Certificate No:</td>
+                <td><strong>{{ certificate.certificate_no }}</strong></td>
+                <td>Date:</td>
+                <td>{{ certificate.certificate_date|date:"d/m/Y" }}</td>
+            </tr>
+            <tr>
+                <td>Project ID:</td>
+                <td>{{ project.project_id }}</td>
+                <td>Project Type:</td>
+                <td>{{ project.get_project_type_display }}</td>
+            </tr>
+            <tr>
+                <td>Project Title:</td>
+                <td colspan="3"><strong>{{ project.title }}</strong></td>
+            </tr>
+        </table>
+        
+        <!-- Contract Information -->
+        <div class="contract-info">
+            <h4>CONTRACT INFORMATION</h4>
+            <table style="width: 100%; border-collapse: collapse;">
+                <tr>
+                    <td style="width: 25%; font-weight: bold;">Contractor:</td>
+                    <td style="width: 75%;">MESSRS {{ project.contractor.name|default:"—" }}</td>
+                </tr>
+                <tr>
+                    <td style="font-weight: bold;">Address:</td>
+                    <td>{{ project.contractor.address|default:"—" }}</td>
+                </tr>
+                <tr>
+                    <td style="font-weight: bold;">Contact:</td>
+                    <td>{{ project.contractor.phone|default:"—" }} | {{ project.contractor.email|default:"—" }}</td>
+                </tr>
+                <tr>
+                    <td style="font-weight: bold;">Contract Award Ref:</td>
+                    <td>{{ project.contract_award_ref|default:"—" }}</td>
+                </tr>
+                <tr>
+                    <td style="font-weight: bold;">Contract Award Date:</td>
+                    <td>{{ project.contract_award_date|date:"d/m/Y"|default:"—" }}</td>
+                </tr>
+                <tr>
+                    <td style="font-weight: bold;">Contract Sum:</td>
+                    <td><strong>₦ {{ project.contract_sum|floatformat:2|default:"0.00" }}</strong></td>
+                </tr>
+            </table>
+        </div>
+        
+        <!-- Payment Certificate Table -->
+        <table class="certificate-table">
+            <thead>
+                <tr>
+                    <th colspan="3">PAYMENT CERTIFICATE CALCULATION</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td class="label-cell">CONTRACT SUM</td>
+                    <td></td>
+                    <td class="amount-cell">₦ {{ project.contract_sum|floatformat:2|default:"0.00" }}</td>
+                </tr>
+                
+                <tr>
+                    <td class="label-cell">LESS CONTINGENCIES</td>
+                    <td></td>
+                    <td class="amount-cell">₦ {{ certificate.contingencies|floatformat:2 }}</td>
+                </tr>
+                
+                <tr class="section-header">
+                    <td colspan="3">SCHEDULE OF WORKS</td>
+                </tr>
+                
+                <tr>
+                    <td class="label-cell">LESS ESTIMATED OMISSION</td>
+                    <td></td>
+                    <td class="amount-cell">₦ {{ certificate.estimated_omission|floatformat:2 }}</td>
+                </tr>
+                
+                <tr>
+                    <td class="label-cell">ADD ESTIMATED ADDITION</td>
+                    <td></td>
+                    <td class="amount-cell">₦ {{ certificate.estimated_addition|floatformat:2 }}</td>
+                </tr>
+                
+                <tr class="total-row">
+                    <td class="label-cell">ESTIMATED TOTAL COST OF WORKS</td>
+                    <td></td>
+                    <td class="amount-cell">₦ {{ certificate.estimated_total_cost|floatformat:2 }}</td>
+                </tr>
+                
+                <tr style="background-color: #f5f5f5;">
+                    <td colspan="3" style="height: 10px;"></td>
+                </tr>
+                
+                <tr>
+                    <td class="label-cell">1. WORK COMPLETED TO DATE</td>
+                    <td></td>
+                    <td class="amount-cell">₦ {{ certificate.work_completed_to_date|floatformat:2 }}</td>
+                </tr>
+                
+                <tr>
+                    <td class="label-cell">2. ADD COST OF ESCALATION</td>
+                    <td></td>
+                    <td class="amount-cell">₦ {{ certificate.cost_of_escalation|floatformat:2 }}</td>
+                </tr>
+                
+                <tr>
+                    <td class="label-cell">3. MATERIALS ON SITE</td>
+                    <td></td>
+                    <td class="amount-cell">₦ {{ certificate.materials_on_site|floatformat:2 }}</td>
+                </tr>
+                
+                <tr>
+                    <td class="label-cell">4. TOTAL VALUE OF WORKS AND MATERIALS ON SITE</td>
+                    <td></td>
+                    <td class="amount-cell">₦ {{ certificate.total_value_works|floatformat:2 }}</td>
+                </tr>
+                
+                <tr>
+                    <td class="label-cell">5. LESS RETENTION ({{ certificate.retention_rate }}%)</td>
+                    <td></td>
+                    <td class="amount-cell">₦ {{ certificate.retention_amount|floatformat:2 }}</td>
+                </tr>
+                
+                <tr>
+                    <td class="label-cell">6. FLUCTUATION AND OTHER CLAIMS</td>
+                    <td></td>
+                    <td class="amount-cell">₦ {{ certificate.fluctuation_claims|floatformat:2 }}</td>
+                </tr>
+                
+                <tr class="total-row">
+                    <td class="label-cell">7. TOTAL NET PAYMENT IN RESPECT OF WORKS</td>
+                    <td></td>
+                    <td class="amount-cell">₦ {{ certificate.total_net_payment|floatformat:2 }}</td>
+                </tr>
+                
+                <tr>
+                    <td class="label-cell">8. LESS REFUND OF ADVANCE PAYMENT</td>
+                    <td></td>
+                    <td class="amount-cell">₦ {{ certificate.refund_advance_payment|floatformat:2 }}</td>
+                </tr>
+                
+                <tr class="total-row">
+                    <td class="label-cell">9. TOTAL NET AMOUNT PAYABLE TO DATE</td>
+                    <td></td>
+                    <td class="amount-cell">₦ {{ certificate.total_net_amount_payable|floatformat:2 }}</td>
+                </tr>
+                
+                <tr>
+                    <td class="label-cell">10. LESS AMOUNT PREVIOUSLY CERTIFIED</td>
+                    <td></td>
+                    <td class="amount-cell">₦ {{ certificate.amount_previously_certified|floatformat:2 }}</td>
+                </tr>
+                
+                <tr class="grand-total">
+                    <td class="label-cell">11. AMOUNT NOW PAYABLE</td>
+                    <td></td>
+                    <td class="amount-cell"><strong>₦ {{ certificate.amount_now_payable|floatformat:2 }}</strong></td>
+                </tr>
+            </tbody>
+        </table>
+        
+        <!-- Amount in Words -->
+        <div class="amount-in-words">
+            <p><strong>Amount in Words:</strong> 
+                {% with amount=certificate.amount_now_payable %}
+                    {% if amount %}
+                        {{ grand_total_words }}
+                    {% else %}
+                        Zero Naira Only
+                    {% endif %}
+                {% endwith %}
+            </p>
+        </div>
+        
+        <!-- Footer -->
+        <div class="footer">
+            <p>
+                Generated on: {{ generated_date|date:"d/m/Y H:i" }} | 
+                Certificate Ref: {{ certificate.certificate_no }} |
+                This is a computer-generated document. No signature is required.
+            </p>
+        </div>
+    </div>
+
+    <script>
+        window.onload = function() {
+            console.log('Certificate PDF loaded');
+        };
+    </script>
+</body>
+</html>

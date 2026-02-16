@@ -8,6 +8,10 @@ urlpatterns = [
     # Project List and Detail
     path('create/', views.ProjectCreateView.as_view(), name='project_create'),
     path('', views.ProjectListView.as_view(), name='project_list'),
+    path('contractors/', views.contractor_list, name='contractor_list'),
+    path('contractors/add/', views.contractor_create, name='contractor_create'),
+    path('contractors/<uuid:contractor_id>/', views.contractor_detail, name='contractor_detail'),
+    path('contractors/<uuid:contractor_id>/edit/', views.contractor_update, name='contractor_update'),
     path('<str:project_id>/', views.ProjectDetailView.as_view(), name='project_detail'),
     
     path('<str:project_id>/update/', views.ProjectUpdateView.as_view(), name='project_update'),
@@ -38,8 +42,9 @@ urlpatterns = [
     path('<str:project_id>/stage/nomination-supervisor/<uuid:stage_id>/', 
         views.nomination_supervisor_view, name='nomination_supervisor'),
 
-    # path('<str:project_id>/certificate/<uuid:certificate_id>/pdf/', 
-    #  views.certificate_pdf_view, name='certificate_pdf'),
+    path('<str:project_id>/certificate/<uuid:certificate_id>/pdf/', 
+     views.certificate_pdf_view, name='certificate_pdf'),
+    
     
     # Project Documents
     path('<str:project_id>/documents/', views.project_documents, name='project_documents'),
