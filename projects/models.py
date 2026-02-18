@@ -354,7 +354,7 @@ class Budget(models.Model):
 
 class BudgetItem(models.Model):
     item_id = models.UUIDField(default=uuid.uuid4, editable=False, unique=True)
-    budget = models.ForeignKey(Budget, on_delete=models.CASCADE, related_name='items')
+    budget = models.ForeignKey(Budget, on_delete=models.CASCADE, related_name='items', default=None, null=True, blank=True)
     
     ctr = models.CharField(max_length=50, help_text="Cost Tracking Reference")
     expenditure_description = models.TextField()
@@ -391,6 +391,83 @@ class ProjectBudgetAllocation(models.Model):
     def __str__(self):
         return f"{self.project.project_id} - {self.budget.budget_head}"
 
+class ProjectNomination(models.Model):
+    NOMINATION_TYPES = [
+        ('project_manager', 'Project Manager'),
+        ('supervisor', 'Project Supervisor'),
+    ]
+    
+    NOMINATION_STATUS = [
+        ('pending_gm', 'Pending GM Approval'),
+        ('pending_ed', 'Pending ED Approval'),
+        ('approved', 'Approved'),
+        ('rejected', 'Rejected'),
+    ]
+    
+    nomination_id = models.UUIDField(default=uuid.uuid4, editable=False, unique=True)
+    project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name='nominations')
+    nomination_type = models.CharField(max_length=20, choices=NOMINATION_TYPES)
+    
+    # Nominee details
+    nominee = models.ForeignKey(User, on_delete=models.CASCADE, related_name='project_nominations')
+    nominee_office = models.CharField(max_length=100, null=True, blank=True)  # Store office at time of nomination
+    nominee_department = models.CharField(max_length=100, null=True, blank=True)  # Store department at time of nomination
+    
+    # Project location at time of nomination
+    project_location = models.CharField(max_length=200)
+    
+    # Approval chain
+    nominated_by = models.ForeignKey(
+        User, 
+        on_delete=models.SET_NULL, 
+        null=True, 
+        related_name='nominated_projects'
+    )
+    nominator_office = models.CharField(max_length=100, null=True, blank=True)  # Store nominator's office
+    
+    gm_approved_by = models.ForeignKey(
+        User, 
+        on_delete=models.SET_NULL, 
+        null=True, 
+        blank=True, 
+        related_name='gm_approved_nominations'
+    )
+    ed_approved_by = models.ForeignKey(
+        User, 
+        on_delete=models.SET_NULL, 
+        null=True, 
+        blank=True, 
+        related_name='ed_approved_nominations'
+    )
+    
+    # Status and dates
+    status = models.CharField(max_length=20, choices=NOMINATION_STATUS, default='pending_gm')
+    gm_approved_at = models.DateTimeField(null=True, blank=True)
+    ed_approved_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    # Rejection reason
+    rejection_reason = models.TextField(blank=True)
+    
+    class Meta:
+        ordering = ['-created_at']
+        # Allow multiple nominations of same type (for multiple managers/supervisors)
+        # But prevent duplicate active nominations for same person
+        unique_together = ['project', 'nomination_type', 'nominee', 'status']
+    
+    def __str__(self):
+        return f"{self.project.project_id} - {self.get_nomination_type_display()} - {self.nominee.get_full_name()}"
+    
+    def save(self, *args, **kwargs):
+        # Store office and department at time of nomination
+        if not self.nominee_office:
+            self.nominee_office = self.nominee.get_office_display()
+        if not self.nominee_department:
+            self.nominee_department = self.nominee.get_department_display()
+        if self.nominated_by and not self.nominator_office:
+            self.nominator_office = self.nominated_by.get_office_display()
+        super().save(*args, **kwargs)
 
 # projects/models.py
 class PaymentCertificate(models.Model):
@@ -460,7 +537,17 @@ class PaymentCertificate(models.Model):
         """AMOUNT NOW PAYABLE (11)"""
         return self.total_net_amount_payable - self.amount_previously_certified
     
-        
+class Notification(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='notifications')
+    title = models.CharField(max_length=200)
+    message = models.TextField()
+    link = models.CharField(max_length=500, blank=True)
+    is_read = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        ordering = ['-created_at']
+
 # Technical Review Committee Model
 class TechnicalReview(models.Model):
     review_id = models.UUIDField(default=uuid.uuid4, editable=False, unique=True)

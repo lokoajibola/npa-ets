@@ -188,7 +188,7 @@
         }
     {% endif %}
     
-    // Format number with commas
+    // Format number with commas (for display only)
     function formatNumber(amount) {
         if (isNaN(amount) || amount === null) return '0.00';
         return parseFloat(amount).toLocaleString('en-NG', {
@@ -227,6 +227,11 @@
         let naira = Math.floor(num);
         let result = '';
         
+        if (naira >= 1000000000) {
+            result += convertLessThanThousand(Math.floor(naira / 1000000000)) + ' Billion ';
+            naira %= 1000000000;
+        }
+
         if (naira >= 1000000) {
             result += convertLessThanThousand(Math.floor(naira / 1000000)) + ' Million ';
             naira %= 1000000;
@@ -298,9 +303,11 @@
                           placeholder="Enter budget head description"></textarea>
             </td>
             <td>
-                <input type="text" class="budget-input amount-input format-number" 
-                       placeholder="0.00" oninput="formatAmountField(this)" 
-                       onblur="updateItemAmount(this)">
+                <input type="number" class="budget-input amount-input" 
+                    step="0.01" min="0" 
+                    placeholder="0.00" 
+                    onchange="updateGrandTotal()"
+                    style="text-align: right;">
             </td>
             <td>
                 <textarea class="budget-input justification-input" rows="2" 
@@ -330,34 +337,17 @@
         updateGrandTotal();
     }
     
-    // Format amount field as user types
-    function formatAmountField(input) {
-        let value = input.value.replace(/[₦,]/g, '');
-        if (value && !isNaN(value)) {
-            let num = parseFloat(value);
-            if (!isNaN(num)) {
-                input.value = formatNumber(num);
-            }
-        }
-    }
-    
-    // Update item amount and grand total
-    function updateItemAmount(input) {
-        let value = input.value.replace(/[₦,]/g, '');
-        let num = parseFloat(value) || 0;
-        input.value = formatNumber(num);
-        updateGrandTotal();
-    }
-    
     // Update grand total
     function updateGrandTotal() {
         let total = 0;
         document.querySelectorAll('.amount-input').forEach(input => {
-            let value = input.value.replace(/[₦,]/g, '');
-            total += parseFloat(value) || 0;
+            total += parseFloat(input.value) || 0;
         });
         
-        document.getElementById('grand-total').textContent = formatCurrency(total);
+        document.getElementById('grand-total').textContent = '₦' + total.toLocaleString('en-NG', {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2
+        });
         document.getElementById('amount-in-words').innerHTML = 
             `<strong>Amount in Words:</strong> ${numberToWords(total)}`;
         
@@ -386,7 +376,7 @@
                         section: sectionName,
                         ctr: ctrInput ? ctrInput.value : '',
                         description: descInput ? descInput.value : '',
-                        amount: amountInput ? amountInput.value.replace(/[₦,]/g, '') : '0',
+                        amount: amountInput ? amountInput.value : '0',
                         justification: justInput ? justInput.value : '',
                         remarks: remarksInput ? remarksInput.value : ''
                     });
@@ -475,7 +465,7 @@
                 if (item.description) newRow.querySelector('.description-input').value = item.description;
                 if (item.amount) {
                     let num = parseFloat(item.amount) || 0;
-                    newRow.querySelector('.amount-input').value = formatNumber(num);
+                    newRow.querySelector('.amount-input').value = num.toFixed(2);
                 }
                 if (item.justification) newRow.querySelector('.justification-input').value = item.justification;
                 if (item.remarks) newRow.querySelector('.remarks-input').value = item.remarks;
@@ -508,8 +498,11 @@
                 console.log('Form submitting, storing data...');
                 storeBudgetData();
                 
-                // Validate at least one item
+                // Verify items_data is set
                 const itemsData = document.getElementById('items-data').value;
+                console.log('Items data being submitted:', itemsData);
+                
+                // Optional: Add validation
                 const items = JSON.parse(itemsData || '[]');
                 if (items.length === 0) {
                     e.preventDefault();

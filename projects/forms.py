@@ -5,7 +5,6 @@ from django.contrib.auth import get_user_model
 from .models import ProjectStage, BOQItem 
 from .models import Project, PORT_LOCATION_CHOICES, DEPARTMENT_CHOICES
 
-
 User = get_user_model()
 
 class ProjectForm(forms.ModelForm):
@@ -367,23 +366,69 @@ class PaymentCertificateForm(forms.ModelForm):
         }
 
 
-class NominationSupervisorForm(forms.ModelForm):
-    project_manager = forms.ModelChoiceField(
-        queryset=User.objects.filter(office='engineer', grade_level__gte=10),
-        label="Project Manager"
+from .models import ProjectNomination
+
+
+from .models import User
+
+class ProjectNominationForm(forms.Form):
+    # Multiple selection fields
+    project_managers = forms.ModelMultipleChoiceField(
+        queryset=User.objects.filter(is_active=True).order_by('last_name'),
+        required=False,
+        widget=forms.SelectMultiple(attrs={'class': 'form-control', 'size': '8'}),
+        label="Project Managers"
     )
-    supervisor = forms.ModelChoiceField(
-        queryset=User.objects.filter(office='engineer'),
-        label="Project Supervisor"
-    )
-    appointment_date = forms.DateField(widget=forms.DateInput(attrs={'type': 'date'}))
-    terms_of_reference = forms.CharField(widget=forms.Textarea(attrs={'rows': 3}))
-    authority_level = forms.ChoiceField(choices=[
-        ('full', 'Full Authority'),
-        ('limited', 'Limited Authority'),
-        ('monitoring', 'Monitoring Only')
-    ])
     
-    class Meta:
-        model = ProjectStage
-        fields = ['status', 'start_date', 'end_date', 'document', 'notes']
+    supervisors = forms.ModelMultipleChoiceField(
+        queryset=User.objects.filter(is_active=True).order_by('last_name'),
+        required=False,
+        widget=forms.SelectMultiple(attrs={'class': 'form-control', 'size': '8'}),
+        label="Project Supervisors"
+    )
+    
+    project_location = forms.CharField(
+        max_length=200,
+        widget=forms.TextInput(attrs={'class': 'form-control', 'readonly': 'readonly'}),
+        label="Project Location"
+    )
+    
+    def __init__(self, *args, **kwargs):
+        self.project = kwargs.pop('project', None)
+        super().__init__(*args, **kwargs)
+        
+        if self.project:
+            # Exclude already approved personnel
+            approved_pms = ProjectNomination.objects.filter(
+                project=self.project,
+                nomination_type='project_manager',
+                status='approved'
+            ).values_list('nominee_id', flat=True)
+            
+            approved_sups = ProjectNomination.objects.filter(
+                project=self.project,
+                nomination_type='supervisor',
+                status='approved'
+            ).values_list('nominee_id', flat=True)
+            
+            self.fields['project_managers'].queryset = User.objects.filter(
+                is_active=True
+            ).exclude(
+                id__in=approved_pms
+            ).order_by('last_name')
+            
+            self.fields['supervisors'].queryset = User.objects.filter(
+                is_active=True
+            ).exclude(
+                id__in=approved_sups
+            ).order_by('last_name')
+    
+    def clean(self):
+        cleaned_data = super().clean()
+        pms = cleaned_data.get('project_managers')
+        sups = cleaned_data.get('supervisors')
+        
+        if not pms and not sups:
+            raise forms.ValidationError("Please nominate at least one Project Manager or Supervisor.")
+        
+        return cleaned_data

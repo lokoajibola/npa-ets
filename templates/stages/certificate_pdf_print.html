@@ -1,3 +1,4 @@
+{% load currency_filters %} 
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -287,7 +288,7 @@
                 </tr>
                 <tr>
                     <td style="font-weight: bold;">Contract Sum:</td>
-                    <td><strong>₦ {{ project.contract_sum|floatformat:2|default:"0.00" }}</strong></td>
+                    <td><strong>  {{ project.contract_sum|currency|default:"0.00" }}</strong></td>
                 </tr>
             </table>
         </div>
@@ -303,13 +304,13 @@
                 <tr>
                     <td class="label-cell">CONTRACT SUM</td>
                     <td></td>
-                    <td class="amount-cell">₦ {{ project.contract_sum|floatformat:2|default:"0.00" }}</td>
+                    <td class="amount-cell">  {{ project.contract_sum|currency|default:"0.00" }}</td>
                 </tr>
                 
                 <tr>
                     <td class="label-cell">LESS CONTINGENCIES</td>
                     <td></td>
-                    <td class="amount-cell">₦ {{ certificate.contingencies|floatformat:2 }}</td>
+                    <td class="amount-cell">  {{ certificate.contingencies|currency }}</td>
                 </tr>
                 
                 <tr class="section-header">
@@ -319,19 +320,19 @@
                 <tr>
                     <td class="label-cell">LESS ESTIMATED OMISSION</td>
                     <td></td>
-                    <td class="amount-cell">₦ {{ certificate.estimated_omission|floatformat:2 }}</td>
+                    <td class="amount-cell">  {{ certificate.estimated_omission|currency }}</td>
                 </tr>
                 
                 <tr>
                     <td class="label-cell">ADD ESTIMATED ADDITION</td>
                     <td></td>
-                    <td class="amount-cell">₦ {{ certificate.estimated_addition|floatformat:2 }}</td>
+                    <td class="amount-cell">  {{ certificate.estimated_addition|currency }}</td>
                 </tr>
                 
                 <tr class="total-row">
                     <td class="label-cell">ESTIMATED TOTAL COST OF WORKS</td>
                     <td></td>
-                    <td class="amount-cell">₦ {{ certificate.estimated_total_cost|floatformat:2 }}</td>
+                    <td class="amount-cell">  {{ certificate.estimated_total_cost|currency }}</td>
                 </tr>
                 
                 <tr style="background-color: #f5f5f5;">
@@ -341,67 +342,67 @@
                 <tr>
                     <td class="label-cell">1. WORK COMPLETED TO DATE</td>
                     <td></td>
-                    <td class="amount-cell">₦ {{ certificate.work_completed_to_date|floatformat:2 }}</td>
+                    <td class="amount-cell">  {{ certificate.work_completed_to_date|currency }}</td>
                 </tr>
                 
                 <tr>
                     <td class="label-cell">2. ADD COST OF ESCALATION</td>
                     <td></td>
-                    <td class="amount-cell">₦ {{ certificate.cost_of_escalation|floatformat:2 }}</td>
+                    <td class="amount-cell">  {{ certificate.cost_of_escalation|currency }}</td>
                 </tr>
                 
                 <tr>
                     <td class="label-cell">3. MATERIALS ON SITE</td>
                     <td></td>
-                    <td class="amount-cell">₦ {{ certificate.materials_on_site|floatformat:2 }}</td>
+                    <td class="amount-cell">  {{ certificate.materials_on_site|currency }}</td>
                 </tr>
                 
                 <tr>
                     <td class="label-cell">4. TOTAL VALUE OF WORKS AND MATERIALS ON SITE</td>
                     <td></td>
-                    <td class="amount-cell">₦ {{ certificate.total_value_works|floatformat:2 }}</td>
+                    <td class="amount-cell">  {{ certificate.total_value_works|currency }}</td>
                 </tr>
                 
                 <tr>
                     <td class="label-cell">5. LESS RETENTION ({{ certificate.retention_rate }}%)</td>
                     <td></td>
-                    <td class="amount-cell">₦ {{ certificate.retention_amount|floatformat:2 }}</td>
+                    <td class="amount-cell">  {{ certificate.retention_amount|currency }}</td>
                 </tr>
                 
                 <tr>
                     <td class="label-cell">6. FLUCTUATION AND OTHER CLAIMS</td>
                     <td></td>
-                    <td class="amount-cell">₦ {{ certificate.fluctuation_claims|floatformat:2 }}</td>
+                    <td class="amount-cell">  {{ certificate.fluctuation_claims|currency }}</td>
                 </tr>
                 
                 <tr class="total-row">
                     <td class="label-cell">7. TOTAL NET PAYMENT IN RESPECT OF WORKS</td>
                     <td></td>
-                    <td class="amount-cell">₦ {{ certificate.total_net_payment|floatformat:2 }}</td>
+                    <td class="amount-cell">  {{ certificate.total_net_payment|currency }}</td>
                 </tr>
                 
                 <tr>
                     <td class="label-cell">8. LESS REFUND OF ADVANCE PAYMENT</td>
                     <td></td>
-                    <td class="amount-cell">₦ {{ certificate.refund_advance_payment|floatformat:2 }}</td>
+                    <td class="amount-cell">  {{ certificate.refund_advance_payment|currency }}</td>
                 </tr>
                 
                 <tr class="total-row">
                     <td class="label-cell">9. TOTAL NET AMOUNT PAYABLE TO DATE</td>
                     <td></td>
-                    <td class="amount-cell">₦ {{ certificate.total_net_amount_payable|floatformat:2 }}</td>
+                    <td class="amount-cell">  {{ certificate.total_net_amount_payable|currency }}</td>
                 </tr>
                 
                 <tr>
                     <td class="label-cell">10. LESS AMOUNT PREVIOUSLY CERTIFIED</td>
                     <td></td>
-                    <td class="amount-cell">₦ {{ certificate.amount_previously_certified|floatformat:2 }}</td>
+                    <td class="amount-cell">  {{ certificate.amount_previously_certified|currency }}</td>
                 </tr>
                 
                 <tr class="grand-total">
                     <td class="label-cell">11. AMOUNT NOW PAYABLE</td>
                     <td></td>
-                    <td class="amount-cell"><strong>₦ {{ certificate.amount_now_payable|floatformat:2 }}</strong></td>
+                    <td class="amount-cell"><strong>  {{ certificate.amount_now_payable|currency }}</strong></td>
                 </tr>
             </tbody>
         </table>

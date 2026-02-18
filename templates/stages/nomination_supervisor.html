@@ -1,0 +1,171 @@
+{% extends 'base.html' %}
+{% load crispy_forms_tags %}
+
+{% block page_title %}{{ page_title }}{% endblock %}
+
+{% block extra_css %}
+<style>
+    .nomination-card {
+        border-left: 4px solid #003087;
+        margin-bottom: 20px;
+    }
+    .approved-list {
+        background-color: #f8f9fa;
+        padding: 10px;
+        border-radius: 5px;
+        margin-top: 10px;
+    }
+    .badge-pending {
+        background-color: #ffc107;
+        color: #000;
+    }
+    .badge-approved {
+        background-color: #28a745;
+        color: #fff;
+    }
+    select[multiple] {
+        min-height: 200px;
+    }
+    .help-text {
+        font-size: 0.85rem;
+        color: #6c757d;
+        margin-top: 5px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-md-8">
+            <!-- Main Nomination Form -->
+            <div class="card mb-4">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0"><i class="bi bi-person-plus me-2"></i>Nominate Project Personnel</h5>
+                </div>
+                <div class="card-body">
+                    <div class="alert alert-info">
+                        <i class="bi bi-info-circle me-2"></i>
+                        <strong>Note:</strong> Only Principal Managers and above can nominate personnel.
+                        You can select multiple people for each role. Hold Ctrl (or Cmd on Mac) to select multiple.
+                        Nominations require GM and ED approval.
+                    </div>
+                    
+                    <form method="post">
+                        {% csrf_token %}
+                        
+                        <div class="row mb-3">
+                            <div class="col-md-12">
+                                <label class="form-label fw-bold">Project Location</label>
+                                <input type="text" class="form-control bg-light" 
+                                       value="{% if project.location %}{{ project.get_location_display }}{% else %}{{ project.other_location|default:'' }}{% endif %}" 
+                                       readonly>
+                                <input type="hidden" name="project_location" 
+                                       value="{% if project.location %}{{ project.get_location_display }}{% else %}{{ project.other_location|default:'' }}{% endif %}">
+                            </div>
+                        </div>
+                        
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="card nomination-card">
+                                    <div class="card-header bg-light">
+                                        <h6 class="mb-0"><i class="bi bi-person-badge me-2"></i>Project Managers</h6>
+                                    </div>
+                                    <div class="card-body">
+                                        <select name="project_managers" multiple class="form-control">
+                                            {% for user in form.fields.project_managers.queryset %}
+                                            <option value="{{ user.id }}">
+                                                {{ user.get_full_name }} - {{ user.get_office_display }} 
+                                                ({{ user.get_department_display }})
+                                            </option>
+                                            {% endfor %}
+                                        </select>
+                                        <div class="help-text">
+                                            Hold Ctrl/Cmd to select multiple. Currently approved managers are excluded.
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="col-md-6">
+                                <div class="card nomination-card">
+                                    <div class="card-header bg-light">
+                                        <h6 class="mb-0"><i class="bi bi-person-workspace me-2"></i>Project Supervisors</h6>
+                                    </div>
+                                    <div class="card-body">
+                                        <select name="supervisors" multiple class="form-control">
+                                            {% for user in form.fields.supervisors.queryset %}
+                                            <option value="{{ user.id }}">
+                                                {{ user.get_full_name }} - {{ user.get_office_display }} 
+                                                ({{ user.get_department_display }})
+                                            </option>
+                                            {% endfor %}
+                                        </select>
+                                        <div class="help-text">
+                                            Hold Ctrl/Cmd to select multiple. Currently approved supervisors are excluded.
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="mt-4">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="bi bi-send me-2"></i>Submit Nominations
+                            </button>
+                            <a href="{% url 'nomination_list' project_id=project.project_id %}" 
+                               class="btn btn-info ms-2">
+                                <i class="bi bi-list me-2"></i>View All Nominations
+                            </a>
+                            <a href="{% url 'project_detail' project_id=project.project_id %}" 
+                               class="btn btn-outline-secondary ms-2">
+                                Cancel
+                            </a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-4">
+            <!-- Currently Approved Personnel -->
+            <div class="card mb-4">
+                <div class="card-header bg-success text-white">
+                    <h6 class="mb-0"><i class="bi bi-check-circle me-2"></i>Approved Personnel</h6>
+                </div>
+                <div class="card-body">
+                    <div class="approved-list">
+                        <h6 class="mb-2">Project Managers:</h6>
+                        {% if approved_pms %}
+                            {% for pm in approved_pms %}
+                            <div class="mb-2 p-2 border-bottom">
+                                <strong>{{ pm.nominee.get_full_name }}</strong><br>
+                                <small>{{ pm.nominee.get_office_display }}</small>
+                                <span class="badge bg-success float-end">Approved</span>
+                            </div>
+                            {% endfor %}
+                        {% else %}
+                            <p class="text-muted">None approved yet</p>
+                        {% endif %}
+                        
+                        <hr>
+                        
+                        <h6 class="mb-2">Supervisors:</h6>
+                        {% if approved_sups %}
+                            {% for sup in approved_sups %}
+                            <div class="mb-2 p-2 border-bottom">
+                                <strong>{{ sup.nominee.get_full_name }}</strong><br>
+                                <small>{{ sup.nominee.get_office_display }}</small>
+                                <span class="badge bg-success float-end">Approved</span>
+                            </div>
+                            {% endfor %}
+                        {% else %}
+                            <p class="text-muted">None approved yet</p>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,42 @@
+{% extends 'base.html' %}
+
+{% block page_title %}{{ page_title }}{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="row justify-content-center">
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header bg-danger text-white">
+                    <h5 class="mb-0"><i class="bi bi-exclamation-triangle me-2"></i>Delete Nomination</h5>
+                </div>
+                <div class="card-body">
+                    <p class="lead">Are you sure you want to delete this nomination?</p>
+                    
+                    <div class="alert alert-warning">
+                        <strong>Project:</strong> {{ nomination.project.project_id }}<br>
+                        <strong>Type:</strong> {{ nomination.get_nomination_type_display }}<br>
+                        <strong>Nominee:</strong> {{ nomination.nominee.get_full_name }}<br>
+                        <strong>Status:</strong> {{ nomination.get_status_display }}<br>
+                        <strong>Nominated By:</strong> {{ nomination.nominated_by.get_full_name }}<br>
+                        <strong>Date:</strong> {{ nomination.created_at|date:"d/m/Y H:i" }}
+                    </div>
+                    
+                    <p class="text-danger">This action cannot be undone.</p>
+                    
+                    <form method="post">
+                        {% csrf_token %}
+                        <button type="submit" class="btn btn-danger">
+                            <i class="bi bi-trash me-2"></i>Yes, Delete Nomination
+                        </button>
+                        <a href="{% url 'nomination_list' project_id=nomination.project.project_id %}" 
+                           class="btn btn-outline-secondary ms-2">
+                            Cancel
+                        </a>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

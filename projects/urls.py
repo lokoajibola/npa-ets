@@ -8,6 +8,7 @@ urlpatterns = [
     # Project List and Detail
     path('create/', views.ProjectCreateView.as_view(), name='project_create'),
     path('', views.ProjectListView.as_view(), name='project_list'),
+    path('dashboard/', views.dashboard_view, name='dashboard'),
     path('contractors/', views.contractor_list, name='contractor_list'),
     path('contractors/add/', views.contractor_create, name='contractor_create'),
     # Budget URLs
@@ -16,6 +17,16 @@ urlpatterns = [
     path('budgets/<uuid:budget_id>/', views.budget_detail_view, name='budget_detail'),
     path('budgets/<uuid:budget_id>/items/', views.budget_items_view, name='budget_items'),
     
+    # Nomination URLs
+    path('<str:project_id>/stage/nominate-supervisor/<uuid:stage_id>/', 
+         views.nomination_supervisor_view, name='nomination_supervisor'),
+    path('<str:project_id>/nominations/', 
+         views.nomination_list_view, name='nomination_list'),
+    path('nominations/approve/<uuid:nomination_id>/', 
+         views.approve_nomination_view, name='approve_nomination'),
+    path('nominations/delete/<uuid:nomination_id>/', 
+         views.delete_nomination_view, name='delete_nomination'),
+
     # API
     path('api/budgets/by-department/', views.api_budgets_by_department, name='api_budgets_by_department'),
 

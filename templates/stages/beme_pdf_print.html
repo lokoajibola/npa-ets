@@ -1,3 +1,6 @@
+{% load static %}
+{% load currency_filters %} 
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -292,15 +295,15 @@
                     <tr>
                         <td style="text-align: center;">{{ item.item_number }}</td>
                         <td>{{ item.description }}</td>
-                        <td style="text-align: right;">{{ item.quantity|floatformat:2 }}</td>
+                        <td style="text-align: right;">{{ item.quantity|commafy }}</td>
                         <td style="text-align: center;">{{ item.get_unit_display }}</td>
-                        <td class="amount">{{ item.rate|floatformat:2 }}</td>
-                        <td class="amount">{{ item.amount|floatformat:2 }}</td>
+                        <td class="amount">{{ item.rate|commafy }}</td>
+                        <td class="amount">{{ item.amount|commafy }}</td>
                     </tr>
                     {% endfor %}
                     <tr class="section-total">
                         <td colspan="5" style="text-align: right; font-weight: bold;">SECTION TOTAL:</td>
-                        <td class="amount" style="font-weight: bold;">{{ section_totals|get_item:section_name|floatformat:2 }}</td>
+                        <td class="amount" style="font-weight: bold;">{{ section_totals|get_item:section_name|commafy }}</td>
                     </tr>
                 </tbody>
             </table>
@@ -316,19 +319,19 @@
             <table style="border: 1px solid #ccc;">
                 <tr>
                     <td style="font-weight: bold; width: 60%;">SUB-TOTAL:</td>
-                    <td class="amount" style="width: 40%;">₦ {{ subtotal|floatformat:2 }}</td>
+                    <td class="amount" style="width: 40%;">₦ {{ subtotal|currency }}</td>
                 </tr>
                 <tr>
                     <td style="font-weight: bold;">CONTINGENCY (5%):</td>
-                    <td class="amount">₦ {{ contingency|floatformat:2 }}</td>
+                    <td class="amount">₦ {{ contingency|currency }}</td>
                 </tr>
                 <tr>
                     <td style="font-weight: bold;">VAT (7.5%):</td>
-                    <td class="amount">₦ {{ vat|floatformat:2 }}</td>
+                    <td class="amount">₦ {{ vat|currency}}</td>
                 </tr>
                 <tr class="grand-total">
                     <td style="font-weight: bold;">GRAND TOTAL:</td>
-                    <td class="amount" style="font-weight: bold;">₦ {{ grand_total|floatformat:2 }}</td>
+                    <td class="amount" style="font-weight: bold;">₦ {{ grand_total|currency }}</td>
                 </tr>
             </table>
         </div>

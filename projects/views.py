@@ -5,14 +5,318 @@ from django.views.generic import ListView, DetailView, CreateView, UpdateView
 from django.urls import reverse_lazy
 from django.contrib import messages
 from django.db.models import Q
-from .models import PaymentCertificate, Project, ProjectStage, ProjectDocument, ProgressReport, Contractor, BOQItem
-from .forms import ProjectForm, ProjectStageForm, ProjectDocumentForm, ProgressReportForm, SiteInspectionForm, ProjectProposalForm, ContractAwardForm, DueDiligenceForm, PaymentCertificateForm, NominationSupervisorForm
+from .models import User, PaymentCertificate, Project, ProjectStage, ProjectDocument, ProgressReport, Contractor, BOQItem
+from .forms import ProjectForm, ProjectStageForm, ProjectDocumentForm, ProgressReportForm, SiteInspectionForm, ProjectProposalForm, ContractAwardForm, DueDiligenceForm, PaymentCertificateForm, ProjectNominationForm
 from django.utils import timezone
 from .forms import ContractorForm, BudgetForm
 from django.db.models import Sum
 from .models import Budget, BudgetItem, ProjectBudgetAllocation
+from django.urls import reverse  # Add this line
+
 # projects/views.py
 from django.http import JsonResponse
+from .models import ProjectNomination, Notification
+
+
+@login_required
+def dashboard_view(request):
+    """Main dashboard - shows different views based on user role"""
+    user = request.user
+    
+    # Common data for all users
+    my_nominations = ProjectNomination.objects.filter(nominated_by=user).order_by('-created_at')
+    
+    context = {
+        'my_nominations': my_nominations,
+        'page_title': 'Dashboard',
+    }
+    
+    # AGM/Manager Dashboard (can nominate)
+    if user.office in ['chief_port_engineer', 'unit_head', 'assistant_general_manager']:
+        projects_for_nomination = Project.objects.filter(
+            status='in_progress'
+        ).exclude(
+            nominations__nomination_type='project_manager',
+            nominations__status='approved'
+        ).distinct()
+        
+        context.update({
+            'projects_for_nomination': projects_for_nomination,
+            'role': 'manager'
+        })
+    
+    # GM Dashboard (approves first level)
+    if user.office == 'general_manager':
+        pending_gm = ProjectNomination.objects.filter(
+            status='pending_gm'
+        ).order_by('-created_at')
+        
+        context.update({
+            'pending_gm': pending_gm,
+            'role': 'gm'
+        })
+    
+    # ED Dashboard (final approval)
+    if user.office == 'executive_director':
+        pending_ed = ProjectNomination.objects.filter(
+            status='pending_ed'
+        ).order_by('-created_at')
+        
+        context.update({
+            'pending_ed': pending_ed,
+            'role': 'ed'
+        })
+    
+    return render(request, 'dashboard/dashboard.html', context)
+
+
+@login_required
+def nomination_list_view(request, project_id):
+    """View all nominations for a project"""
+    project = get_object_or_404(Project, project_id=project_id)
+    
+    # Check permission to view
+    allowed_offices = ['chief_port_engineer', 'general_manager', 'executive_director', 
+                       'assistant_general_manager', 'unit_head']
+    
+    if request.user.office not in allowed_offices and request.user != project.created_by:
+        messages.error(request, "You don't have permission to view nominations.")
+        return redirect('project_detail', project_id=project_id)
+    
+    nominations = ProjectNomination.objects.filter(project=project).order_by('-created_at')
+    
+    # Group by status
+    approved = nominations.filter(status='approved')
+    pending_gm = nominations.filter(status='pending_gm')
+    pending_ed = nominations.filter(status='pending_ed')
+    rejected = nominations.filter(status='rejected')
+    
+    context = {
+        'project': project,
+        'approved': approved,
+        'pending_gm': pending_gm,
+        'pending_ed': pending_ed,
+        'rejected': rejected,
+        'page_title': f'Nominations - {project.project_id}',
+    }
+    return render(request, 'stages/nomination_list.html', context)
+
+
+@login_required
+def delete_nomination_view(request, nomination_id):
+    """Delete a nomination (only if pending)"""
+    nomination = get_object_or_404(ProjectNomination, nomination_id=nomination_id)
+    
+    # Check permission (only nominator or GM/ED can delete)
+    if request.user != nomination.nominated_by and request.user.office not in ['general_manager', 'executive_director']:
+        messages.error(request, "You don't have permission to delete this nomination.")
+        return redirect('project_detail', project_id=nomination.project.project_id)
+    
+    # Only allow deletion if still pending
+    if nomination.status not in ['pending_gm', 'pending_ed']:
+        messages.error(request, "Only pending nominations can be deleted.")
+        return redirect('nomination_list', project_id=nomination.project.project_id)
+    
+    if request.method == 'POST':
+        nomination.delete()
+        messages.success(request, "Nomination deleted successfully.")
+        return redirect('nomination_list', project_id=nomination.project.project_id)
+    
+    context = {
+        'nomination': nomination,
+        'page_title': 'Delete Nomination',
+    }
+    return render(request, 'stages/delete_nomination.html', context)
+
+@login_required
+def nomination_supervisor_view(request, project_id, stage_id):
+    project = get_object_or_404(Project, project_id=project_id)
+    stage = get_object_or_404(ProjectStage, stage_id=stage_id, project=project)
+    
+    # Check if user has permission to nominate (Principal Managers and above)
+    allowed_offices = ['chief_port_engineer', 'general_manager', 'executive_director', 
+                       'assistant_general_manager', 'unit_head']
+    
+    if request.user.office not in allowed_offices:
+        messages.error(request, "Only Principal Managers and above can nominate project personnel.")
+        return redirect('project_detail', project_id=project_id)
+    
+    # Get existing approved nominations
+    approved_pms = ProjectNomination.objects.filter(
+        project=project,
+        nomination_type='project_manager',
+        status='approved'
+    )
+    approved_sups = ProjectNomination.objects.filter(
+        project=project,
+        nomination_type='supervisor',
+        status='approved'
+    )
+    
+    if request.method == 'POST':
+        form = ProjectNominationForm(request.POST, project=project)
+        
+        if form.is_valid():
+            pms = form.cleaned_data.get('project_managers')
+            sups = form.cleaned_data.get('supervisors')
+            project_location = form.cleaned_data.get('project_location')
+            
+            # Get GM and ED users for notification
+            gm_users = User.objects.filter(
+                office='general_manager',
+                is_active=True
+            )
+            ed_users = User.objects.filter(
+                office='executive_director',
+                is_active=True
+            )
+            
+            # Create PM nominations
+            for pm in pms:
+                nomination = ProjectNomination.objects.create(
+                    project=project,
+                    nomination_type='project_manager',
+                    nominee=pm,
+                    project_location=project_location,
+                    nominated_by=request.user,
+                    status='pending_gm'
+                )
+                
+                # Notify GM
+                for gm in gm_users:
+                    Notification.objects.create(
+                        user=gm,
+                        title=f"Project Manager Nomination - {project.project_id}",
+                        message=f"{request.user.get_full_name()} ({request.user.get_office_display()}) has nominated {pm.get_full_name()} as Project Manager",
+                        link=reverse('approve_nomination', args=[nomination.nomination_id])
+                    )
+            
+            # Create Supervisor nominations
+            for sup in sups:
+                nomination = ProjectNomination.objects.create(
+                    project=project,
+                    nomination_type='supervisor',
+                    nominee=sup,
+                    project_location=project_location,
+                    nominated_by=request.user,
+                    status='pending_gm'
+                )
+                
+                # Notify GM
+                for gm in gm_users:
+                    Notification.objects.create(
+                        user=gm,
+                        title=f"Supervisor Nomination - {project.project_id}",
+                        message=f"{request.user.get_full_name()} ({request.user.get_office_display()}) has nominated {sup.get_full_name()} as Project Supervisor",
+                        link=reverse('approve_nomination', args=[nomination.nomination_id])
+                    )
+            
+            messages.success(request, f"{pms.count() + sups.count()} nomination(s) submitted successfully for GM approval.")
+            
+            # Update stage status
+            stage.status = 'requires_approval'
+            stage.save()
+            
+            return redirect('nomination_list', project_id=project_id)
+        else:
+            messages.error(request, "Please correct the errors below.")
+    else:
+        initial = {
+            'project_location': project.get_location_display() if project.location else project.other_location or '',
+        }
+        form = ProjectNominationForm(initial=initial, project=project)
+    
+    context = {
+        'form': form,
+        'project': project,
+        'stage': stage,
+        'approved_pms': approved_pms,
+        'approved_sups': approved_sups,
+        'page_title': 'Nominate Project Personnel',
+    }
+    return render(request, 'stages/nomination_supervisor.html', context)
+
+@login_required
+def approve_nomination_view(request, nomination_id):
+    nomination = get_object_or_404(ProjectNomination, nomination_id=nomination_id)
+    
+    # Check if user is GM or ED
+    is_gm = request.user.office == 'general_manager'
+    is_ed = request.user.office == 'executive_director'
+    
+    if not (is_gm or is_ed):
+        messages.error(request, "You don't have permission to approve nominations.")
+        return redirect('dashboard')
+    
+    if request.method == 'POST':
+        action = request.POST.get('action')
+        rejection_reason = request.POST.get('rejection_reason', '')
+        
+        if action == 'approve':
+            if is_gm and nomination.status == 'pending_gm':
+                nomination.status = 'pending_ed'
+                nomination.gm_approved_by = request.user
+                nomination.gm_approved_at = timezone.now()
+                
+                # Notify ED
+                ed_users = User.objects.filter(office='executive_director', is_active=True)
+                for ed in ed_users:
+                    Notification.objects.create(
+                        user=ed,
+                        title=f"Final Approval Required - {nomination.project.project_id}",
+                        message=f"GM has approved {nomination.nominee.get_full_name()} as {nomination.get_nomination_type_display()}. Your approval is required.",
+                        link=reverse('approve_nomination', args=[nomination.nomination_id])
+                    )
+                
+                messages.success(request, f"Nominated {nomination.nominee.get_full_name()} forwarded to ED for final approval.")
+                
+            elif is_ed and nomination.status == 'pending_ed':
+                nomination.status = 'approved'
+                nomination.ed_approved_by = request.user
+                nomination.ed_approved_at = timezone.now()
+                
+                # Update project with nominated personnel
+                if nomination.nomination_type == 'project_manager':
+                    nomination.project.project_manager = nomination.nominee
+                else:
+                    nomination.project.supervisor = nomination.nominee
+                nomination.project.save()
+                
+                messages.success(request, f"{nomination.get_nomination_type_display()} approved successfully!")
+                
+                # Notify nominator
+                Notification.objects.create(
+                    user=nomination.nominated_by,
+                    title=f"Nomination Approved - {nomination.project.project_id}",
+                    message=f"Your nomination of {nomination.nominee.get_full_name()} as {nomination.get_nomination_type_display()} has been fully approved.",
+                )
+            else:
+                messages.error(request, "Invalid approval action.")
+                
+        elif action == 'reject':
+            nomination.status = 'rejected'
+            nomination.rejection_reason = rejection_reason
+            nomination.save()
+            
+            # Notify nominator
+            Notification.objects.create(
+                user=nomination.nominated_by,
+                title=f"Nomination Rejected - {nomination.project.project_id}",
+                message=f"Your nomination of {nomination.nominee.get_full_name()} as {nomination.get_nomination_type_display()} was rejected. Reason: {rejection_reason}",
+            )
+            
+            messages.warning(request, f"Nomination rejected.")
+        
+        nomination.save()
+        return redirect('dashboard')
+    
+    context = {
+        'nomination': nomination,
+        'is_gm': is_gm,
+        'is_ed': is_ed,
+        'page_title': 'Approve Nomination',
+    }
+    return render(request, 'stages/approve_nomination.html', context)
 
 @login_required
 def api_budgets_by_department(request):
@@ -90,7 +394,18 @@ def budget_create_view(request):
                 messages.error(request, f'Error saving budget items: {str(e)}')
                 budget.delete()  # Rollback
         else:
-            messages.error(request, 'Please correct the errors below.')
+            items_data = request.POST.get('items_data', '[]')
+            
+            context = {
+                'form': form,
+                'page_title': 'Create Budget',
+                'departments': Budget._meta.get_field('department').choices,
+                'budget_types': Budget._meta.get_field('budget_type').choices,
+                'current_year': timezone.now().year,
+                'initial_items': items_data,  # Pass back the submitted items
+                'form_submitted': True,  # Flag to indicate form was submitted
+            }
+            return render(request, 'budgets/budget_form.html', context)
     else:
         form = BudgetForm()
     
@@ -100,6 +415,7 @@ def budget_create_view(request):
         'departments': Budget._meta.get_field('department').choices,
         'budget_types': Budget._meta.get_field('budget_type').choices,
         'current_year': timezone.now().year,
+        'initial_items': '[]',
     }
     return render(request, 'budgets/budget_form.html', context)
 
@@ -1167,11 +1483,7 @@ def contract_award_view(request, project_id, stage_id):
     }
     return render(request, 'stages/contract_award.html', context)
 
-@login_required
-def nomination_supervisor_view(request, project_id, stage_id):
-    return stage_specific_view(request, project_id, stage_id,
-                              'nominate_pm', NominationSupervisorForm,
-                              'stages/nomination_supervisor.html')
+
 
 # Add to views.py
 @login_required

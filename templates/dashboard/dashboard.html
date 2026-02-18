@@ -1,0 +1,147 @@
+{% extends 'base.html' %}
+
+{% block page_title %}Dashboard{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <!-- My Nominations (for all users) -->
+        <div class="col-md-6 mb-4">
+            <div class="card">
+                <div class="card-header bg-primary text-white">
+                    <h6 class="mb-0"><i class="bi bi-send me-2"></i>My Nominations</h6>
+                </div>
+                <div class="card-body">
+                    {% if my_nominations %}
+                        <div class="table-responsive">
+                            <table class="table table-sm">
+                                <thead>
+                                    <tr>
+                                        <th>Project</th>
+                                        <th>Type</th>
+                                        <th>Nominee</th>
+                                        <th>Status</th>
+                                        <th>Date</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for nom in my_nominations %}
+                                    <tr>
+                                        <td>{{ nom.project.project_id }}</td>
+                                        <td>{{ nom.get_nomination_type_display }}</td>
+                                        <td>{{ nom.nominee.get_full_name }}</td>
+                                        <td>
+                                            <span class="badge {% if nom.status == 'approved' %}bg-success{% elif nom.status == 'rejected' %}bg-danger{% else %}bg-warning{% endif %}">
+                                                {{ nom.get_status_display }}
+                                            </span>
+                                        </td>
+                                        <td>{{ nom.created_at|date:"d/m/Y" }}</td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    {% else %}
+                        <p class="text-muted mb-0">No nominations made yet.</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        
+        <!-- Manager Section - Projects needing nominations -->
+        {% if role == 'manager' %}
+        <div class="col-md-6 mb-4">
+            <div class="card">
+                <div class="card-header bg-success text-white">
+                    <h6 class="mb-0"><i class="bi bi-person-plus me-2"></i>Projects Needing Nominations</h6>
+                </div>
+                <div class="card-body">
+                    {% if projects_for_nomination %}
+                        <div class="list-group">
+                            {% for proj in projects_for_nomination %}
+                            <a href="{% url 'nomination_supervisor' project_id=proj.project_id stage_id=proj.stages.first.stage_id %}" 
+                               class="list-group-item list-group-item-action">
+                                <div class="d-flex justify-content-between">
+                                    <div>
+                                        <strong>{{ proj.project_id }}</strong><br>
+                                        {{ proj.title|truncatechars:50 }}
+                                    </div>
+                                    <small class="text-muted">{{ proj.location }}</small>
+                                </div>
+                            </a>
+                            {% endfor %}
+                        </div>
+                    {% else %}
+                        <p class="text-muted mb-0">All projects have nominations.</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        {% endif %}
+        
+        <!-- GM Section - Pending GM Approval -->
+        {% if role == 'gm' %}
+        <div class="col-md-6 mb-4">
+            <div class="card">
+                <div class="card-header bg-warning">
+                    <h6 class="mb-0"><i class="bi bi-clock-history me-2"></i>Pending GM Approval</h6>
+                </div>
+                <div class="card-body">
+                    {% if pending_gm %}
+                        <div class="list-group">
+                            {% for nom in pending_gm %}
+                            <a href="{% url 'approve_nomination' nomination_id=nom.nomination_id %}" 
+                               class="list-group-item list-group-item-action">
+                                <div class="d-flex justify-content-between">
+                                    <div>
+                                        <strong>{{ nom.project.project_id }}</strong><br>
+                                        {{ nom.get_nomination_type_display }}: {{ nom.nominee.get_full_name }}<br>
+                                        <small>Nominated by: {{ nom.nominated_by.get_full_name }}</small>
+                                    </div>
+                                    <small>{{ nom.created_at|timesince }} ago</small>
+                                </div>
+                            </a>
+                            {% endfor %}
+                        </div>
+                    {% else %}
+                        <p class="text-muted mb-0">No pending approvals.</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        {% endif %}
+        
+        <!-- ED Section - Pending ED Approval -->
+        {% if role == 'ed' %}
+        <div class="col-md-6 mb-4">
+            <div class="card">
+                <div class="card-header bg-warning">
+                    <h6 class="mb-0"><i class="bi bi-clock-history me-2"></i>Pending ED Approval</h6>
+                </div>
+                <div class="card-body">
+                    {% if pending_ed %}
+                        <div class="list-group">
+                            {% for nom in pending_ed %}
+                            <a href="{% url 'approve_nomination' nomination_id=nom.nomination_id %}" 
+                               class="list-group-item list-group-item-action">
+                                <div class="d-flex justify-content-between">
+                                    <div>
+                                        <strong>{{ nom.project.project_id }}</strong><br>
+                                        {{ nom.get_nomination_type_display }}: {{ nom.nominee.get_full_name }}<br>
+                                        <small>GM Approved by: {{ nom.gm_approved_by.get_full_name }}</small>
+                                    </div>
+                                    <small>{{ nom.gm_approved_at|timesince }} ago</small>
+                                </div>
+                            </a>
+                            {% endfor %}
+                        </div>
+                    {% else %}
+                        <p class="text-muted mb-0">No pending approvals.</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
